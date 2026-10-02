@@ -32,7 +32,7 @@ class PackagingUITests(unittest.TestCase):
  def test_review_screen_preserves_editor_and_uses_final_packages_without_model_work(self):
   app=self.app.run();self.assertFalse(app.exception)
   self.assertEqual([t.label for t in app.tabs],['Edit','Look','Post','Advanced'])
-  self.assertTrue(any(b.label=='v5.17' for b in app.button))
+  self.assertTrue(any(b.label=='v5.18' for b in app.button))
   self.assertEqual(self.export.call_args.kwargs['ranges'],self.primary['edit_plan']['ranges'])
   self.assertTrue(self.export.call_args.kwargs['presentation']['semantic_emphasis'])
   self.assertEqual(next(s for s in app.selectbox if s.label=='Visual pacing').value,'Subtle')
@@ -70,3 +70,12 @@ class PackagingUITests(unittest.TestCase):
   self.app.run();self.assertFalse(self.app.exception)
   self.assertTrue(any(e.label=='Suggested edit assessment' for e in self.app.expander))
   self.export.assert_not_called()
+ def test_finished_clip_is_indexed_and_can_open_the_combination_builder(self):
+  with patch('combined_video_ui.add_to_draft') as add,patch('combined_video_ui.show') as show:
+   app=self.app.run();self.assertFalse(app.exception)
+   saved=json.loads((self.folder/'finished-clips.json').read_text())
+   self.assertEqual(next(iter(saved.values()))['video'],str(self.video.resolve()))
+   next(b for b in app.button if b.label=='Add to combined video').click().run()
+   self.assertFalse(app.exception);self.assertEqual(app.session_state['page'],'combine')
+   self.assertEqual(add.call_args.args[1]['video'],str(self.video.resolve()))
+   show.assert_called_once()

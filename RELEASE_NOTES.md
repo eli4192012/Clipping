@@ -1,3 +1,17 @@
+# v5.18 · Combine clips into longer videos
+
+- Adds Combine clips in the sidebar and collection, plus Add to combined video in the clip editor. Select finished clips from multiple projects, search/filter them, change their order and remove items without deleting their original files.
+- Saves named combinations locally for later editing. Uses the exact finished clip versions, retaining their baked captions, opening text and framing. New individual edits can be added as new versions.
+- Exports one wide 16:9 MP4 by default (1280 × 720), with vertical output available. Clips fit without new cropping; unused space can use a blurred or dark background. Existing cropped areas cannot be restored by joining exports.
+- Normalizes differing frame sizes/rates and audio formats one clip at a time. Silent clips receive silence; speech is not synthesized or analyzed. Available SRT captions shift onto the combined timeline, with an embedded subtitle track, chapter markers and a downloadable timestamp list.
+- Caches prepared clips and completed combinations. Reordering reuses prepared clips; an unchanged export skips encoding. Prior exports remain saved. Preview/browser download are on request, and Finder can reveal the saved file directly.
+- Shows when a saved result is outdated after combination changes. Progress uses completed preparation and actual FFmpeg output times; remaining time is an estimate.
+- No new dependencies, model inference, transcription, discovery or analysis-cache version change.
+
+See V518_VALIDATION.md for mixed-format regressions, the real 82-second export, preservation checks and performance measurements.
+
+---
+
 # v5.17 · Clearer framing and final-clip packaging
 
 - Organizes clip review into Edit, Look, Post and Advanced. Keeps the v5.16 Shorts Editor, manual boundaries, supported alternate versions and original comparison.

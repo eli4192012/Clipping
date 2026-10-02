@@ -23,7 +23,7 @@ install(st)
 @st.dialog('What changed',width='large')
 def release_report():
     st.markdown((ROOT/'RELEASE_NOTES.md').read_text())
-    validation=ROOT/'V517_VALIDATION.md'
+    validation=ROOT/'V518_VALIDATION.md'
     if validation.exists():
         with st.expander('Test results and limitations'):
             st.markdown(validation.read_text())
@@ -40,7 +40,7 @@ st.session_state.setdefault('page','library')
 page=st.session_state.page
 stages=['source','settings','processing','complete','results','editor']
 active=0 if page=='source' else 1 if page=='settings' else 2 if page=='processing' else 3
-if page not in ('library','source','accounts','social_history'):
+if page not in ('library','source','accounts','social_history','combine'):
     st.markdown('<nav class="steps" aria-label="Project progress">'+ '<span class="step-connector" aria-hidden="true">—</span>'.join(f'<span class="step {"active" if i==active else "done" if i<active else ""}" '+('aria-current="step"' if i==active else '')+f'><span class="step-number">{"✓" if i<active else f"{i+1:02}"}</span>{name}</span>' for i,name in enumerate(['Add video','Make it yours','Find moments','Review clips']))+'</nav>',unsafe_allow_html=True)
 
 
@@ -64,6 +64,7 @@ with st.sidebar:
     st.markdown('<div class="eyebrow">WORKSPACE</div>',unsafe_allow_html=True)
     if page!='processing' and st.button('My projects',icon=':material/home:',use_container_width=True,type='primary' if page=='library' else 'secondary'):go('library')
     if page!='processing' and st.button('＋ New project',icon=':material/add_circle:',use_container_width=True,type='primary' if page=='source' else 'secondary'):go('source')
+    if page!='processing' and st.button('Combine clips',icon=':material/playlist_add:',use_container_width=True,type='primary' if page=='combine' else 'secondary'):go('combine')
     if page!='processing' and st.button('Accounts',icon=':material/group:',use_container_width=True):go('accounts')
     if page!='processing' and st.button('Publishing history',icon=':material/history:',use_container_width=True):go('social_history')
     st.divider()
@@ -72,6 +73,11 @@ with st.sidebar:
             st.write(f"{'✓' if ready else '○'} {name}")
         st.caption('Missing a model? Run Download Models.command in the Clipping folder.')
     st.markdown('<div class="studio-note"><strong><span class="local-dot"></span>Local by default.</strong><br>Only clips you choose to publish leave this Mac.</div>',unsafe_allow_html=True)
+
+if page=='combine':
+    from combined_video_ui import show as show_combined_video
+    show_combined_video(ROOT)
+    st.stop()
 
 if page=='accounts':
     from social_ui import accounts_screen
@@ -326,6 +332,7 @@ if page=='results':
     a.metric('Clips',len(candidates));b.metric('Ready to use',len(candidates)-used_count);c.metric('Used',used_count)
     show_used=st.radio('Show clips',['All','Unused','Used'],horizontal=True)
     clip_search=st.text_input('Search clips',placeholder='Find a title or spoken phrase…').strip().lower()
+    if st.button('Combine saved clips into a video'):go('combine')
     if st.button('← Overview'):go('complete')
     visible=0
     for i,c in enumerate(candidates):
@@ -456,6 +463,13 @@ if page=='editor':
         with preview:
             st.video(str(video));st.caption(f'{clock(timeline_duration(final_ranges))} · Extracted clip starts at 0:00')
             download_area=st.container()
+        from combined_video import register_clip
+        finished_clip=register_clip(folder,video,captions,style.get('title') or candidate['title'],project['title'])
+        finished_clip['duration']=timeline_duration(final_ranges)
+        with edit_tab:
+            if st.button('Add to combined video'):
+                from combined_video_ui import add_to_draft
+                add_to_draft(ROOT,finished_clip);go('combine')
         with look_tab:
             decision=read(video.with_suffix('.framing.json'),{})
             if decision.get('reason'):st.caption(decision['reason'])

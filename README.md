@@ -38,7 +38,7 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.17**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.18**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
 
 Saved videos can be reopened from the start screen. Settings and previous results are kept locally. Initial processing estimates use video length and selected review options; later estimates use this video's previous measured processing time. Percentages represent processing milestones, not a promise of constant speed.
 
@@ -47,6 +47,22 @@ Saved videos can be reopened from the start screen. Settings and previous result
 Balanced uses Whisper base locally on the CPU; Higher quality uses the local Whisper large-v3-turbo model. The Shorts Editor uses Qwen3 4B 4-bit through MLX in either mode. The older continuous-clip workflow can use Qwen3 1.7B in Balanced. Models are downloaded once; subsequent processing uses their local files. No transcript or media is sent to a model service. Streamlit telemetry is disabled and the server binds only to localhost.
 
 If models are missing, double-click **Download Models.command** while connected to the internet. Allow several GB of disk space for dependencies, models, source videos, and exports. English editorial review is recommended. Whisper can detect other languages, but this app's selection rules are English-oriented.
+
+## Combine clips into a longer video
+
+Choose **Combine clips** in the sidebar, or **Add to combined video** while reviewing a finished clip. You can use clips from multiple saved projects.
+
+1. Give the combined video a name. **Wide · 16:9** is the default (1280 × 720); vertical output is also available.
+2. Find saved clips by project or title, choose them and click **Add selected clips**. Clips appear in the order you add them.
+3. Use **↑ / ↓** to change the order or **Remove** to remove a clip from this combination. Your order and settings save locally; **Saved combinations** reopens them later.
+4. Click **Export combined video**. The app joins the finished clips, saves one MP4 and combines available SRT captions with updated timestamps. Clip titles become chapter markers and a downloadable timestamp list.
+5. Use **Show video in Finder**, or **Prepare video download → Save combined video**. Preview and browser download load the longer video only when requested.
+
+Clips retain their finished captions, opening text and framing. Vertical clips fit into a wide canvas with a blurred background by default; turn that option off for a dark background. This step does not restore picture areas cropped out of a finished clip. For footage that should fill a wide video, choose Original framing when reviewing that clip before adding its new export. Open **Review clip** once for any suggestion that has not been rendered yet; only finished exports appear in this builder.
+
+Combinations use direct cuts, without new transitions, speech changes or AI analysis. Review the story and joins yourself. Changes to an individual clip produce a new saved version that you can add; an existing combination keeps the version you selected. Changing a combination leaves prior exports intact and visibly marks the last export as outdated until you export again.
+
+All processing stays on this Mac. The exporter prepares one clip at a time, handles differing shapes/frame rates and silent clips, and caches prepared media. An unchanged combination reuses its output; changing order reuses its prepared clips. Sources, transcripts and separate clip exports remain intact. Temporary prepared media lives under work/assembly-renders/ and can take additional disk space. See [v5.18 validation](V518_VALIDATION.md) for measured results and limits.
 
 ## Current Shorts workflow
 
