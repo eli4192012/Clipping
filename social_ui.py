@@ -125,6 +125,15 @@ def draft_panel(draft):
                     except Exception:st.error('Publishing could not start. Check account setup and the saved attempt.')
 
 
+def platform_default_copy(platform,copy):
+    """Only defaults for NEW drafts; existing reviewed text remains authoritative."""
+    post=copy.get('platforms',{}).get('Instagram Reels') if platform=='instagram' else None
+    if post:
+        return dict(title=copy['title'],description=post.get('caption','')+
+            ('\n\n'+' '.join(post.get('hashtags',[])) if post.get('hashtags') else ''))
+    return dict(title=copy['title'],description=copy['description'])
+
+
 def composer(folder,run,candidate,video,render_id,copy):
     with st.expander('Publish to social media'):
         accounts=store.accounts()
@@ -135,11 +144,11 @@ def composer(folder,run,candidate,video,render_id,copy):
         account=next(a for a in accounts if a['id']==account_id)
         key=store.identity(folder,run,candidate,account_id,render_id);draft=store.get(key)
         if draft is None or draft['status']=='Draft':
-            initial=draft or dict(title=copy['title'],description=copy['description'],privacy='private',made_for_kids=None,share_to_feed=True)
+            initial=draft or dict(platform_default_copy(account['platform'],copy),privacy='private',made_for_kids=None,share_to_feed=True)
             with st.form('social-draft-'+key):
                 title=st.text_input('YouTube title' if account['platform']=='youtube' else 'Draft title · only for your records',value=initial['title'],max_chars=100)
                 description=st.text_area('Description' if account['platform']=='youtube' else 'Instagram caption',value=initial['description'],height=150)
-                st.caption('You can add hashtags here if wanted. They are not generated automatically.')
+                st.caption('Review the suggested text and hashtags; they do not guarantee reach.' if copy.get('platforms') else 'You can add hashtags here if wanted. They are not generated automatically.')
                 if account['platform']=='youtube':
                     privacy=st.selectbox('Visibility',['private','unlisted','public'],index=['private','unlisted','public'].index(initial['privacy']))
                     audience=st.selectbox('Is this video made for kids?',['Choose…','Yes','No'],index=0 if initial['made_for_kids'] is None else (1 if initial['made_for_kids'] else 2))

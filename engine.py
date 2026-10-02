@@ -188,8 +188,8 @@ def subtitles(words, start, end):
 
 
 def export_clip(source, start, end, words, vertical=False, presentation=None, ranges=None):
-    if ranges is not None:
-        return export_timeline(source, ranges, words, vertical, presentation)
+    if ranges is not None or (presentation or {}).get('packaging_version'):
+        return export_timeline(source, ranges if ranges is not None else [dict(start=start,end=end)], words, vertical, presentation)
     import imageio_ffmpeg
     total = duration(source)
     if not all(math.isfinite(v) for v in (start, end)) or not 0 <= start < end <= total + 0.1:
@@ -260,7 +260,12 @@ def export_timeline(source, ranges, words, vertical=False, presentation=None):
         width, height = stream.width//2*2, stream.height//2*2
         audio = bool(media.streams.audio)
     style_filter = layout_filter(layout, options.get('position', .5), options.get('second', .75))
-    if layout == LAYOUTS[4]:
+    if layout == LAYOUTS[4] and options.get('_visual_plan'):
+        from visual_pacing import camera_filter
+        decision=options['_visual_plan']
+        style_filter=camera_filter(decision)
+        output.with_suffix('.framing.json').write_text(json.dumps(dict(decision,kind=decision['decision']['kind'])))
+    elif layout == LAYOUTS[4]:
         from framing import inspect_framing, framing_filter
         # Full-picture fallback is safer than a fixed crop selected from omitted footage.
         decisions = [inspect_framing(source, r['start'], r['end']) for r in ranges]
@@ -270,7 +275,8 @@ def export_timeline(source, ranges, words, vertical=False, presentation=None):
     if layout != LAYOUTS[0]: width, height = 720, 1280
     if options.get('burn') or options.get('title'):
         ass = output.with_suffix('.ass')
-        write_ass(ass, final_words, 0, length, width, height, options.get('burn', False), options.get('title', ''))
+        write_ass(ass, final_words, 0, length, width, height, options.get('burn', False), options.get('title', ''),
+                  options.get('_emphasis') if options.get('semantic_emphasis') else None,options.get('emphasis_style','Bold'))
         escaped = str(ass).replace('\\', '\\\\').replace(':', '\\:').replace("'", "\\'")
         style_filter += ",ass='" + escaped + "'"
     base = ranges[0]['start']
@@ -289,5 +295,5 @@ def export_timeline(source, ranges, words, vertical=False, presentation=None):
     if result.returncode:
         output.unlink(missing_ok=True)
         raise RuntimeError('Edited export failed: ' + result.stderr[-1800:])
-    output.with_suffix('.timeline.json').write_text(json.dumps(dict(ranges=ranges, duration=length), indent=2))
+    output.with_suffix('.timeline.json').write_text(json.dumps(dict(source=str(Path(source).resolve()),ranges=ranges, duration=length), indent=2))
     return output, captions

@@ -23,7 +23,7 @@ install(st)
 @st.dialog('What changed',width='large')
 def release_report():
     st.markdown((ROOT/'RELEASE_NOTES.md').read_text())
-    validation=ROOT/'V516_VALIDATION.md'
+    validation=ROOT/'V517_VALIDATION.md'
     if validation.exists():
         with st.expander('Test results and limitations'):
             st.markdown(validation.read_text())
@@ -126,6 +126,8 @@ if page=='library':
     notice=st.session_state.pop('deleted_project_notice',None)
     if notice:st.success(notice)
     all_projects=library(ROOT/'data')
+    from creator_profile import show as show_creator_profile
+    show_creator_profile(ROOT/'data')
     a,b,c=st.columns(3)
     a.markdown(stat_card('Projects',len(all_projects),'All your video projects','▱'),unsafe_allow_html=True)
     b.markdown(stat_card('Saved runs',sum(len(e['runs']) for e in all_projects),'Completed analysis runs','▷',True),unsafe_allow_html=True)
@@ -314,6 +316,8 @@ if page=='complete':
     st.stop()
 
 if page=='results':
+    from project_store import read
+    report_words=read(transcript_file(folder,settings),{}).get('words',[])
     st.markdown('<div class="eyebrow">CLIP COLLECTION</div>',unsafe_allow_html=True)
     st.title('Your moments.')
     from clip_usage import is_used
@@ -338,6 +342,11 @@ if page=='results':
             left.subheader(c['title'])
             if c.get('audience_quality'):left.caption(c['audience_quality']['reason'])
             left.write(c['text'][:150]+('…' if len(c['text'])>150 else ''))
+            with left.expander('Suggested edit assessment'):
+                from final_package import editorial_assessment
+                from edit_timeline import ranges_for,remap_words
+                st.dataframe(editorial_assessment(c,remap_words(report_words,ranges_for(c)),ranges_for(c),settings['mode']),hide_index=True,width='stretch')
+                st.caption('Suggested edit only; saved manual changes and alternate versions are assessed when opened. Unknown dimensions remain unscored.')
             if right.button('Review clip →',key=f'open-{i}'):
                 st.session_state.clip_index=i;go('editor')
     if not visible:st.info('No clips match these filters.')
@@ -345,14 +354,14 @@ if page=='results':
 
 if page=='editor':
     if st.button('← All clips'):go('results')
-    index=st.session_state.clip_index;candidate=candidates[index]
+    index=st.session_state.clip_index;candidate=dict(candidates[index]);usage_candidate=dict(candidate)
     st.caption(f'CLIP {index+1:02} OF {len(candidates):02}')
-    candidate=dict(candidate)
-    usage_candidate=dict(candidate)
+    heading=st.empty();preview=st.container()
+    edit_tab,look_tab,post_tab,advanced_tab=st.tabs(['Edit','Look','Post','Advanced'])
     transcript_path=transcript_file(folder,settings);transcript=json.loads(transcript_path.read_text())
     base_edit_id=f"{candidate['start']}-{candidate['end']}"
-    from shorts_ui import choose_edit,decisions
-    candidate,variant=choose_edit(folder,path,candidate,transcript,settings)
+    from shorts_ui import choose_edit
+    with edit_tab:candidate,variant=choose_edit(folder,path,candidate,transcript,settings)
     candidate=dict(candidate)
     edits_path=path.with_suffix('.edits.json');edits=json.loads(edits_path.read_text()) if edits_path.exists() else {}
     edit_id=base_edit_id+(':'+variant if variant!='Original moment' else '')
@@ -360,117 +369,134 @@ if page=='editor':
         manual_start,manual_end=edits[edit_id]
         candidate.update(passed=False,text=' '.join(w['text'] for w in transcript['words'] if w['end']>manual_start and w['start']<manual_end),reason='Manual source boundaries need review; automatic checks apply to the suggested edit.')
         for key in ('audience_review','audience_quality'):candidate.pop(key,None)
-    decisions(candidate)
     original_title=candidate['title']
     if settings['mode']=='Interview' and not candidate.get('edit_plan'):
         from interview_integrity import topic_title
         candidate['title']=topic_title(candidate['text'])
-    st.title(candidate['title'])
-    from audience_quality import show_report as show_audience_report
-    show_audience_report(candidate)
-    from clip_usage import checkbox as usage_checkbox
-    usage_checkbox(folder,path,usage_candidate,'editor')
-    st.caption('Transcript review only; visual completeness is not guaranteed.' if candidate['passed'] else 'Draft · Review the opening and ending before sharing.')
+    heading.title(candidate['title'])
     start,end=edits.get(edit_id,[candidate['start'],candidate['end']])
     active_plan=candidate.get('edit_plan') if edit_id not in edits else None
     render_ranges=active_plan['ranges'] if active_plan else None
-    if candidate.get('edit_plan'):st.caption('Applying manual start/end boundaries exports a continuous source range. Restore suggested boundaries to return to this edited version.')
-    from boundary_editor import editor as boundary_editor
-    changed=boundary_editor(source,total,start,end,transcript,str(path)+edit_id)
-    reset=st.button('Restore suggested boundaries',key='restore-'+str(path)+edit_id)
-    if changed is not None or reset:
-        s,e=(candidate['start'],candidate['end']) if reset else changed
-        if not 0<=s<e<=total:st.error('The end must follow the start, within the source video. The previous cut is kept.')
-        else:
-            from project_store import write
-            if reset:edits.pop(edit_id,None)
-            else:edits[edit_id]=[s,e]
-            write(edits_path,edits);st.rerun()
-    for other in candidates:
-        oid=f"{other['start']}-{other['end']}";s,e=edits.get(oid,[other['start'],other['end']])
-        from modes import intersection
-        current=dict(candidate,start=start,end=end,edit_plan=active_plan or {})
-        if oid!=base_edit_id and intersection(current,dict(other,start=s,end=e))>0:st.warning('Your cut overlaps another suggestion.');break
+    with edit_tab:
+        from clip_usage import checkbox as usage_checkbox
+        usage_checkbox(folder,path,usage_candidate,'editor')
+        st.caption('Transcript review only; listen and review visual content before posting.' if candidate['passed'] else 'Draft · Review the opening and ending before sharing.')
+        if candidate.get('edit_plan'):st.caption('Applying manual start/end boundaries exports a continuous source range. Restore suggested boundaries to return to this edited version.')
+        from boundary_editor import editor as boundary_editor
+        changed=boundary_editor(source,total,start,end,transcript,str(path)+edit_id)
+        reset=st.button('Restore suggested boundaries',key='restore-'+str(path)+edit_id)
+        if changed is not None or reset:
+            s,e=(candidate['start'],candidate['end']) if reset else changed
+            if not 0<=s<e<=total:st.error('The end must follow the start, within the source video. The previous cut is kept.')
+            else:
+                from project_store import write
+                if reset:edits.pop(edit_id,None)
+                else:edits[edit_id]=[s,e]
+                write(edits_path,edits);st.rerun()
+        for other in candidates:
+            oid=f"{other['start']}-{other['end']}";s,e=edits.get(oid,[other['start'],other['end']])
+            from modes import intersection
+            current=dict(candidate,start=start,end=end,edit_plan=active_plan or {})
+            if oid!=base_edit_id and intersection(current,dict(other,start=s,end=e))>0:st.warning('Your cut overlaps another suggestion.');break
     from polish_ui import caption_editor
-    export_words=caption_editor(folder,transcript_path,transcript,start,end,ranges=render_ranges)
+    with look_tab:export_words=caption_editor(folder,transcript_path,transcript,start,end,ranges=render_ranges)
     from presentation import LAYOUTS,normalize_layout,default_layout
-    style_path=path.with_suffix('.styles.json')
-    styles=json.loads(style_path.read_text()) if style_path.exists() else {}
-    style=styles.get(edit_id,dict(layout=default_layout(settings.get('portrait',False)),burn=True,title=candidate['title'] if active_plan or not candidate.get('edit_plan') else '',position=.5,second=.75))
+    from project_store import read,write
+    style_path=path.with_suffix('.styles.json');styles=read(style_path,{})
+    style=styles.get(edit_id,dict(layout=default_layout(settings.get('portrait',False)),burn=True,position=.5,second=.75,
+        pacing='Off' if settings['mode']=='Sports' else 'Subtle',conversation='Off' if settings['mode']=='Sports' else 'Automatic',
+        semantic_emphasis=True,emphasis_style='Bold',packaging_version=1))
     if settings['mode']=='Interview' and not active_plan and style.get('title')==original_title:style=dict(style,title=candidate['title'])
     style=dict(style,layout=normalize_layout(style['layout']))
-    with st.expander('Layout, captions & title'):
-        with st.form('style-'+str(path)+edit_id):
-            layout=st.selectbox('Video layout',LAYOUTS,index=LAYOUTS.index(style['layout']))
-            burn=st.checkbox('Burn highlighted captions into the video',value=style.get('burn',True))
-            title=st.text_input('Opening title · leave blank to hide',value=style.get('title',''),max_chars=100)
-            trim_edges=st.checkbox('Trim verified quiet edges · up to 0.3 seconds per edge',value=style.get('trim_edges',False) and not bool(render_ranges),disabled=bool(render_ranges))
-            st.caption('Off by default. Keeps a speech margin and never removes internal pauses or changes the saved suggestion.')
-            position=st.slider('Speaker crop position / top speaker',0.,1.,float(style.get('position',.5)),step=.05)
-            second=st.slider('Bottom speaker position',0.,1.,float(style.get('second',.75)),step=.05)
-            st.caption('Automatic framing for every video type tries clear full-screen crops first, then uses blur when the sampled subject cannot safely fit. Existing 9:16 footage keeps its framing. Sports action and group scenes keep the wider picture when a safe crop is uncertain. It samples faces rather than tracking the ball or every moving object, so review the result. Sliders apply only to manual speaker crops. Full picture has blurred video behind it, never added black padding.')
-            if st.form_submit_button('Apply style'):
-                styles[edit_id]=dict(layout=layout,burn=burn,title=title,position=position,second=second,trim_edges=trim_edges)
-                style_path.write_text(json.dumps(styles));st.rerun()
     render_start,render_end=start,end
     if style.get('trim_edges') and not render_ranges:
         from polish import silent_edges
         @st.cache_data(show_spinner=False)
         def edge_times(file,mtime,a,b,words):return silent_edges(file,a,b,words)
         render_start,render_end=edge_times(str(source),source.stat().st_mtime_ns,start,end,transcript['words'])
-        st.caption(f'Quiet-edge adjustment: {start:.2f}–{end:.2f}s → {render_start:.2f}–{render_end:.2f}s. Saved boundaries are unchanged.')
-    render_signature=[digest,source.stat().st_mtime_ns,transcript_path.stat().st_mtime_ns,render_start,render_end,style,export_words]
-    render_signature+=([render_ranges,'v516'] if render_ranges else ['v55'])
+        with edit_tab:st.caption(f'Quiet-edge adjustment: {start:.2f}–{end:.2f}s → {render_start:.2f}–{render_end:.2f}s. Saved boundaries are unchanged.')
+    final_ranges=render_ranges or [dict(start=render_start,end=render_end)]
+    from final_package import get_package
+    final_candidate=dict(candidate,edit_plan=active_plan or {})
+    package=get_package(folder,source,final_candidate,export_words,final_ranges,settings['mode'],read(folder/'confirmed-names.json',[]))
+    if 'title' not in style:style['title']=package['hook']
+    from edit_timeline import remap_words,timeline_duration
+    final_words=remap_words(export_words,final_ranges)
+    from packaging_ui import look_form,post_form,advanced
+    with look_tab:
+        updated,apply=look_form(style,package,final_words,settings['mode'],str(path)+edit_id,ranged=bool(render_ranges))
+        if apply:styles[edit_id]=updated;write(style_path,styles);st.rerun()
+    render_style=dict(style)
+    if style.get('packaging_version'):
+        render_style['_emphasis']=package['emphasis']
+        if style['layout']==LAYOUTS[4]:
+            from visual_pacing import inspect_scene,plan_camera
+            try:
+                if settings['mode']=='Sports':
+                    import av
+                    with av.open(str(source)) as media:scene=dict(width=media.streams.video[0].width,height=media.streams.video[0].height,samples=[])
+                else:scene=inspect_scene(source,final_ranges)
+                render_style['_visual_plan']=plan_camera(scene,final_words,final_ranges,package,style,settings['mode'])
+            except Exception as error:
+                with look_tab:st.warning('Automatic camera planning was unavailable; using full picture. '+str(error))
+                render_style['layout']=LAYOUTS[1]
+    render_signature=[digest,source.stat().st_mtime_ns,transcript_path.stat().st_mtime_ns,render_start,render_end,render_style,export_words]
+    render_signature+=([final_ranges,package['fingerprint'],'v517'] if style.get('packaging_version') else ([render_ranges,'v516'] if render_ranges else ['v55']))
     render_id=hashlib.sha256(json.dumps(render_signature).encode()).hexdigest()[:24]
-    manifest=folder/f'render-{render_id}.json'
-    video=None
-    download_area=None
+    manifest=folder/f'render-{render_id}.json';video=None;download_area=None
     try:
-        saved=json.loads(manifest.read_text()) if manifest.exists() else []
+        saved=read(manifest,[])
         if len(saved)==2 and all(Path(p).is_file() for p in saved):video,captions=map(Path,saved)
         else:
             def render(update):
                 update(.05,'Rendering the selected clip')
-                return export_clip(source,render_start,render_end,export_words,settings.get('portrait',False),presentation=style,ranges=render_ranges)
-            video,captions=run_job('render-'+render_id,render,max(15,(end-start)*2))
-            manifest.write_text(json.dumps([str(video),str(captions)]))
-        if video.with_suffix('.framing.json').exists():st.caption(json.loads(video.with_suffix('.framing.json').read_text())['reason'])
-        from edit_timeline import timeline_duration
-        st.video(str(video));st.caption(f'{clock(timeline_duration(render_ranges) if render_ranges else render_end-render_start)} · Extracted clip starts at 0:00')
-        download_area=st.container()
-    except Exception as error:st.error(f'Could not render the clip: {error}')
-    # Platform-required fields remain editable in the publishing form; no writing model runs here.
-    posting_copy=candidate.get('publishing',dict(title=candidate['title'],description='')) if active_plan else dict(title=candidate['title'],description='')
-    if active_plan:
-        with st.expander('Posting text from this edit'):
-            st.code(posting_copy['title'],language=None)
-            st.write(posting_copy['description'])
-    elif candidate.get('edit_plan'):
-        candidate=dict(candidate,text=' '.join(w['text'] for w in transcript['words'] if w['end']>render_start and w['start']<render_end),passed=False)
-    if video is not None and video.is_file():
-        if download_area is not None:
-            from download_names import clip_filename
-            download_title=posting_copy.get('title') or candidate['title']
-            with download_area:
-                a,b=st.columns(2)
-                a.download_button('↓ Save video',video.read_bytes(),clip_filename(download_title),'video/mp4',type='primary')
-                if captions.read_text().strip():b.download_button('↓ Save subtitles',captions.read_bytes(),clip_filename(download_title,'srt'),'text/plain')
-                st.caption('Download name: '+clip_filename(download_title))
-        from clip_thumbnails import show as show_thumbnails
-        show_thumbnails(video,folder,candidate['title'])
-        from social_ui import composer
-        composer(folder,path,candidate,video,render_id,posting_copy)
-    review_details=dict(quality=settings.get('quality','Balanced'),start=start,end=end)
+                return export_clip(source,render_start,render_end,export_words,settings.get('portrait',False),presentation=render_style,ranges=render_ranges)
+            video,captions=run_job('render-'+render_id,render,max(15,timeline_duration(final_ranges)*2))
+            write(manifest,[str(video),str(captions)])
+        with preview:
+            st.video(str(video));st.caption(f'{clock(timeline_duration(final_ranges))} · Extracted clip starts at 0:00')
+            download_area=st.container()
+        with look_tab:
+            decision=read(video.with_suffix('.framing.json'),{})
+            if decision.get('reason'):st.caption(decision['reason'])
+            for warning in decision.get('warnings',[]):st.warning(warning)
+    except Exception as error:
+        with preview:st.error(f'Could not render the clip: {error}')
+    with post_tab:
+        posting_copy=post_form(folder,package)
+        if video is not None and video.is_file():
+            if download_area is not None:
+                from download_names import clip_filename
+                download_title=posting_copy.get('title') or candidate['title']
+                with download_area:
+                    a,b=st.columns(2)
+                    a.download_button('↓ Save video',video.read_bytes(),clip_filename(download_title),'video/mp4',type='primary')
+                    if captions.read_text().strip():b.download_button('↓ Save subtitles',captions.read_bytes(),clip_filename(download_title,'srt'),'text/plain')
+                    st.caption('Download name: '+clip_filename(download_title))
+            from clip_thumbnails import show as show_thumbnails
+            show_thumbnails(video,folder,style.get('title') or package['hook'])
+            from social_ui import composer
+            composer(folder,path,final_candidate,video,render_id,posting_copy)
+    review_details=dict(quality=settings.get('quality','Balanced'),start=start,end=end,
+        visual_pacing=style.get('pacing','Off'),entities=package['entities'],final_transcript=package['final_transcript'])
     if render_ranges:review_details.update(variant=variant,ranges=render_ranges)
-    review_form(folder,str(path),review_details)
-    review_history(folder)
-    with st.expander('Transcript & review notes'):
-        st.write(candidate['text']);st.write(candidate.get('reason','Original discovered moment.'))
-        if candidate.get('concern'):st.warning(candidate['concern'])
-        for note in candidate.get('boundary_notes',[]):st.caption(note)
-        if candidate.get('storyboard') and Path(candidate['storyboard']).exists():st.image(candidate['storyboard'])
-    with st.expander('Watch surrounding context'):
-        st.video(str(source),start_time=float(max(0,start-5)),end_time=float(min(total,end+5)))
-    with st.expander('Full transcript'):
-        for sentence in transcript['sentences']:st.write(f"{sentence['start']:.1f}s · {sentence.get('speaker') or 'Speech'} · {sentence['text']}")
-        st.download_button('Save transcript',transcript_path.read_bytes(),'transcript.json','application/json')
+    if active_plan:
+        original=active_plan['source_moment'];review_details['removed_fraction']=max(0,1-timeline_duration(final_ranges)/(original['end']-original['start']))
+        from interview_integrity import question
+        review_details['answer_only']=question(original['text'].split('?')[0]+'?') and not question(package['sentences'][0]['text']) if '?' in original['text'] and package['sentences'] else None
+    with edit_tab:review_form(folder,str(path),review_details)
+    with advanced_tab:
+        advanced(package,final_candidate,final_words,final_ranges)
+        from audience_quality import show_report as show_audience_report
+        show_audience_report(final_candidate)
+        review_history(folder)
+        with st.expander('Transcript & review notes'):
+            st.write(package['final_transcript']);st.write(candidate.get('reason','Original discovered moment.'))
+            if candidate.get('concern'):st.warning(candidate['concern'])
+            for note in candidate.get('boundary_notes',[]):st.caption(note)
+            if candidate.get('storyboard') and Path(candidate['storyboard']).exists():st.image(candidate['storyboard'])
+        with st.expander('Watch surrounding context'):
+            st.video(str(source),start_time=float(max(0,start-5)),end_time=float(min(total,end+5)))
+        with st.expander('Full transcript'):
+            for sentence in transcript['sentences']:st.write(f"{sentence['start']:.1f}s · {sentence.get('speaker') or 'Speech'} · {sentence['text']}")
+            st.download_button('Save transcript',transcript_path.read_bytes(),'transcript.json','application/json')

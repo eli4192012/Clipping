@@ -1,3 +1,18 @@
+# v5.17 · Clearer framing and final-clip packaging
+
+- Organizes clip review into Edit, Look, Post and Advanced. Keeps the v5.16 Shorts Editor, manual boundaries, supported alternate versions and original comparison.
+- Adds cached sampling across kept footage for automatic speech crops, stable two-person split screen and optional speaker switching. Active Speaker requires user-confirmed anonymous labels and visible positions, holds shots for at least three seconds and ignores short acknowledgements. Uncertain scenes fall back; crop warnings remain visible. Automatic Sports keeps the full picture.
+- Adds Off / Subtle / Dynamic visual pacing. Subtle is the default for new speech looks; movement needs a useful final-transcript beat and safe sampled face margins. The real kicker example received one restrained 3.5% punch-in; the shorter running-back example received none.
+- Emphasizes a few final hook/payoff caption phrases with larger bold treatment or an optional Gentle pop. Caption timing and manual corrections remain intact. New hook suggestions use extractive kept speech, preserve negation/qualifications and can be edited or hidden.
+- Adds separate editable YouTube Shorts, TikTok and Instagram Reels copy, with copy controls and final-edit caches. Specific names/tags must occur in the final transcript. Manual posting text and existing social drafts are retained; no automatic publication occurs.
+- Extends the existing thumbnail feature with eight sampled frames, three ranked/separated choices and editable cover text. New automatic exports can supply clean source frames without duplicate captions. Generation happens on request; blink/expression assessment is still limited. Downloads do not set a platform thumbnail.
+- Adds timestamped B-roll suggestions only, eight explained editorial assessments and a descriptive local Creator Profile from human ratings. Unknown criteria remain unscored. No virality probabilities, preference training, stock downloads, cloud AI or paid API was added.
+- Preserves saved legacy looks until Apply style. Separate packaging caches leave analysis-cache versions and existing transcription/model behavior unchanged. Same-edit reruns reuse metadata, sampling and export caches; only the chosen variant renders.
+
+See V517_VALIDATION.md for measured before/after exports and limitations. V517_IMPLEMENTATION_REPORT.md documents inspected reference code, adopted/rejected ideas, changed files and the recommended next update.
+
+---
+
 # v5.16 · A separate Shorts Editor
 
 - Adds **Edit speech into tighter Shorts**, enabled for new speech analyses. Moment discovery supplies source neighborhoods; a separate editor chooses the actual opening, explanation, internal cuts and payoff. Answer-only openings are allowed when context and meaning checks pass. Sports action keeps its existing pipeline.

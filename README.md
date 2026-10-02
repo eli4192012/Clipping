@@ -16,7 +16,7 @@ python3.13 -m venv .venv
 ./Start\ Clipping.command
 ```
 
-The private repository requires access to the GitHub account. `requirements.lock.txt` records the installed dependency versions; `requirements.txt` lists the direct dependency constraints. Model setup downloads files from Hugging Face and needs internet access and several GB of free space. Transcription, model inference and editing then run locally. Alignment and speaker detection have separate optional setup commands described below.
+The private repository requires access to the GitHub account. `requirements.lock.txt` records the installed dependency versions; `requirements.txt` lists the direct dependency constraints. Model setup downloads files from Hugging Face and the pinned OpenCV YuNet face detector and needs internet access and several GB of free space. Transcription, model inference and editing then run locally. Alignment and speaker detection have separate optional setup commands described below.
 
 The repository contains the app, tests and documentation. Your videos, saved project transcripts, exports, downloaded models, virtual environments, worker artifacts and credentials stay on this Mac and are excluded from Git. Small regression fixtures in `tests/fixtures/` are included for the tests. Validation reports refer to local media and work files that are not included in a clone. GitHub is a code backup; back up your local projects and exports separately.
 
@@ -38,7 +38,7 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.16**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.17**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
 
 Saved videos can be reopened from the start screen. Settings and previous results are kept locally. Initial processing estimates use video length and selected review options; later estimates use this video's previous measured processing time. Percentages represent processing milestones, not a promise of constant speed.
 
@@ -56,7 +56,22 @@ Leave **Edit speech into tighter Shorts** enabled to find moments, then choose t
 
 Caption timing follows the edited timeline. Opening and posting text comes from the final kept speech. Applying manual start/end boundaries exports one continuous source range; restoring suggested boundaries restores the internal cuts. Saved older clips can request a local Shorts edit without rerunning transcription.
 
-These are experimental editing estimates, not predictions of views. The local model can make wrong decisions; listen to joins and compare the original. The larger local editor adds processing time. See V516_VALIDATION.md for measured examples; no whole-video speed guarantee is made. Detailed 100-point ranking, cold opens, visual pacing and analytics learning remain later work.
+These are experimental editing estimates, not predictions of views. The local model can make wrong decisions; listen to joins and compare the original. The larger local editor adds processing time. See V516_VALIDATION.md for measured examples; no whole-video speed guarantee is made. Cold opens, richer scoring and analytics learning remain later work.
+
+## v5.17: finishing the Short
+
+Open a clip to find **Edit / Look / Post / Advanced** tabs. Edit keeps the existing Shorts versions, original comparison and manual boundaries. All packaging uses the selected final timeline, including caption corrections.
+
+- **Look:** Portrait · automatic now samples kept footage across the clip. Speech clips default to Subtle visual pacing: a small progressive punch-in at a useful speech beat, then a wider ending, only when sampled face margins permit it. Off removes this movement; Dynamic permits up to two stronger changes. Some clips correctly receive no zoom. Manual layouts and crop sliders remain available. Automatic Sports framing keeps the full picture and disables speaker switching and pacing.
+- **Conversations:** Automatic can put two stable visible speakers in split screen. Active Speaker requires existing anonymous transcript labels and your confirmation of each person's left/right source position. It holds a shot for at least three seconds and ignores brief acknowledgements. Missing labels, unconfirmed positions or unstable scenes use split screen or the full picture. Face sampling does not understand slides, balls or objects; review the visible crop warning and choose full picture when those matter.
+- **Captions and hooks:** A few phrases from the final hook/payoff can receive larger bold emphasis or a Gentle pop. Word timing still follows the edited timeline; caption corrections remain supported. Suggested opening text quotes strong kept speech and preserves qualifications. Edit it, use the suggested hook, or leave the field blank to hide it. If a truthful short phrase cannot be established, no hook is invented.
+- **Post:** Separate editable YouTube Shorts, TikTok and Instagram Reels packages have native code-block copy buttons. Names and hashtags must occur in the final text; excluded source context cannot silently add a team, league or location. Saved manual copy reopens for the same edit. Hashtags are suggestions, not reach predictions.
+- **Covers:** Click Prepare cover options on request. Eight frames are ranked by sharpness, exposure and available face cues; three separated options can receive editable hook text. New automatic exports provide clean source frames without duplicate burned captions. Blinks, expression and identities still need your judgment. Covers download separately; the app does not automatically set a YouTube Shorts cover.
+- **Advanced:** Inspect eight editorial assessments with grounded evidence where available; unknown criteria remain unscored. B-roll suggestions give final-output timestamps, a subject, a reason and a suitable source type. Nothing is downloaded or inserted. Saved source ranges and decisions remain available for debugging.
+
+**My review patterns** in the project library summarizes your local ratings. It does not train a model or change ranking. Older reviews remain readable; missing new details are not guessed. Fewer than five highly rated cuts are explicitly treated as insufficient evidence for stable preferences.
+
+Existing saved looks retain their previous rendering until you apply a new style. Sources, transcripts, prior analyses, reviews and exports stay local. Packaging, face samples, posting copy and covers have separate caches; reopening an unchanged edit reuses them. No extra transcription or large-model pass was added. Optional cover generation adds work only when requested. See [validation](V517_VALIDATION.md) for measured time and media checks and [the implementation report](V517_IMPLEMENTATION_REPORT.md) for the repository comparison and remaining limits.
 
 ## Historical v1 foundation
 
@@ -67,7 +82,7 @@ These are experimental editing estimates, not predictions of views. The local mo
 
 ## Limits
 
-This is not a validated substitute for an editor. Local models and English-oriented rules can miss useful moments or remove necessary context. Long recordings can take substantial time. No live trend research, proven retention scores, YouTube keyword search or active-speaker tracking is included. Captions can be burned in and corrected locally. Portrait output supports automatic or manual crops and full-picture blur. Shorts editing omits source ranges without synthesizing or reordering speech; review its meaning and timing before publishing.
+This is not a validated substitute for an editor. Local models and English-oriented rules can miss useful moments or remove necessary context. Long recordings can take substantial time. No live trend research, proven retention scores, YouTube keyword search is included. Active-speaker crops require confirmed positions; they are not verified identity or lip-sync tracking. Captions can be burned in and corrected locally. Portrait output supports automatic or manual crops and full-picture blur. Shorts editing omits source ranges without synthesizing or reordering speech; review its meaning and timing before publishing.
 
 Uploaded copies and transcripts stay under `data/`; exports stay under `exports/`. To remove a video's stored data, stop the app and delete its corresponding folder under `data/`. No automatic deletion occurs.
 
@@ -89,6 +104,7 @@ python3.13 -m venv .venv
 - MLX LM: https://github.com/ml-explore/mlx-lm (MIT)
 - Qwen3: https://huggingface.co/Qwen/Qwen3-1.7B (Apache 2.0); quantized distribution: https://huggingface.co/mlx-community/Qwen3-1.7B-4bit
 - Streamlit: https://github.com/streamlit/streamlit (Apache 2.0)
+- OpenCV YuNet face detection: https://github.com/opencv/opencv_zoo/tree/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet (MIT; model and license downloaded during explicit setup)
 - imageio-ffmpeg: https://github.com/imageio/imageio-ffmpeg (BSD-2-Clause). Its bundled FFmpeg binary has its own LGPL/GPL terms depending on build options: https://ffmpeg.org/legal.html
 
 These dependencies retain their own licenses. Before redistributing a packaged app, include the corresponding notices and comply with the bundled FFmpeg build's terms.
