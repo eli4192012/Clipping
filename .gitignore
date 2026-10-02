@@ -1,0 +1,44 @@
+# Local projects, transcripts, exports, model weights and worker artifacts.
+# Keep empty directories so a fresh checkout has the expected workspace layout.
+/data/*
+!/data/.gitkeep
+/exports/*
+!/exports/.gitkeep
+/models/*
+!/models/.gitkeep
+/work/*
+!/work/.gitkeep
+
+# Python environments and generated caches.
+.venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+/build/
+/dist/
+
+# Credentials and machine-specific configuration.
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+client_secret*.json
+credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Editor and macOS metadata.
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp
+*.swo

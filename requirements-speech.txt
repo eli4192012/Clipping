@@ -1,0 +1,2 @@
+whisperx==3.8.6
+imageio-ffmpeg>=0.6,<1
