@@ -73,6 +73,31 @@ class AISocialCopyUITests(unittest.TestCase):
         self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My manual title #Speed')
         self.assertEqual(self.export.call_count,1)
 
+    def test_editor_refreshes_old_loaded_post_form_without_losing_saved_copy(self):
+        import importlib
+        import packaging_ui
+        app=self.app.run();self.assertFalse(app.exception)
+        next(t for t in app.text_input if t.label=='YouTube title').set_value('My saved title #Speed')
+        next(b for b in app.button if b.label=='Save YouTube Shorts text').click().run()
+        saved=(self.folder/'platform-posts-v517.json').read_bytes()
+        def legacy_post_form(folder,package):
+            raise AssertionError('The old posting form should be refreshed before use.')
+        with patch.object(packaging_ui,'POST_FORM_API',0,create=True),patch.object(packaging_ui,'post_form',legacy_post_form),patch('importlib.reload',wraps=importlib.reload) as reload:
+            app.run()
+            self.assertFalse(app.exception)
+            reload.assert_called_once_with(packaging_ui)
+            self.assertEqual(packaging_ui.POST_FORM_API,2)
+            self.assertTrue(any(b.label=='Generate title & description with AI' for b in app.button))
+            self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My saved title #Speed')
+        self.assertEqual((self.folder/'platform-posts-v517.json').read_bytes(),saved)
+        self.assertEqual(self.export.call_count,1)
+
+    def test_current_post_form_does_not_reload_on_editor_reruns(self):
+        with patch('importlib.reload',side_effect=AssertionError('Current posting code should not be reloaded')):
+            app=self.app.run();self.assertFalse(app.exception)
+            app.run();self.assertFalse(app.exception)
+        self.assertEqual(self.export.call_count,1)
+
 
 class DraftCopyUITests(unittest.TestCase):
     def test_reviewed_draft_uses_new_text_only_on_explicit_apply_and_save(self):

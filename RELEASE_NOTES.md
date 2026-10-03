@@ -1,3 +1,8 @@
+# v5.21 · Refresh older posting controls
+
+- Fixes the Social media tab failing with "post_form() takes 2 positional arguments but 3 were given" when an already-running server retains the previous posting form.
+- Refreshes that older module before opening the clip's controls. Current controls are reused normally; saved posting text and video exports are retained. See [validation](V521_VALIDATION.md).
+
 # v5.20 · AI posting titles with inline hashtags
 
 - Renames the clip's Post tab to **Social media** and adds **Generate title & description with AI** to its YouTube posting package. The selected local 4B editor writes the headline and a short final-clip summary, then independently checks them against the final transcript.

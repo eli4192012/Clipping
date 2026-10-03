@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from project_store import read, write
 
+POST_FORM_API=2
+
 
 def look_form(style,package,words,mode,identity,ranged=False):
     import streamlit as st

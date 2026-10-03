@@ -434,6 +434,11 @@ if page=='editor':
     if 'title' not in style:style['title']=package['hook']
     from edit_timeline import remap_words,timeline_duration
     final_words=remap_words(export_words,final_ranges)
+    import packaging_ui
+    # A server opened before the update can retain the two-argument posting form.
+    if getattr(packaging_ui,'POST_FORM_API',0)<2:
+        import importlib
+        importlib.reload(packaging_ui)
     from packaging_ui import look_form,post_form,advanced
     with look_tab:
         updated,apply=look_form(style,package,final_words,settings['mode'],str(path)+edit_id,ranged=bool(render_ranges))
