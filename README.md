@@ -68,6 +68,16 @@ Combinations use direct cuts, without new transitions, speech changes or AI anal
 
 All processing stays on this Mac. The exporter prepares one clip at a time, handles differing shapes/frame rates and silent clips, and caches prepared media. An unchanged combination reuses its output; changing order reuses its prepared clips. Sources, transcripts and separate clip exports remain intact. Temporary prepared media lives under work/assembly-renders/ and can take additional disk space. See [v5.18 validation](V518_VALIDATION.md) for measured results and limits.
 
+## Example library
+
+Choose **Example library** in the sidebar to collect clips and published titles for future AI improvements. This Mac's v5.23 library includes the seven supplied examples, their saved transcripts and sampled frames, the actual posted titles and available analytics. A fresh clone starts with an empty library because these personal records are excluded from Git.
+
+Search by title or notes, filter good patterns/mixed examples/patterns to avoid, and choose a clip. **Show clip preview** loads its video on request. Review **What works** and **What to avoid copying** together: a successful post can still contain a weak start, an unsupported title claim or an extra interview question. Analytics retain their export period and engaged-view counts. A possible YouTube match remains unconfirmed until you mark it confirmed; percentages from tiny audiences are not automatic quality scores.
+
+Use **Review and edit example notes** to change its displayed name, actual posted title, opening text, lessons and notes. Mark a record ready for future reference only after reviewing its lessons. **Add an example** saves a supplied video and optional transcript without transcription, rendering or model inference. Adding the same file keeps its earlier notes. **Download example library** saves all reference records as JSON.
+
+The library lives in data/example-library/ and has no effect on the current AI's editing or writing. Existing source videos, transcripts, exports and model caches are preserved. The seven original imported videos are referenced at their existing locations; keep those files or restore them if moved. Their library notes, transcripts and sampled frames remain available even when an original is missing. New uploaded examples are copied into the library's assets folder. Back up that folder along with your other local projects.
+
 ## Current Shorts workflow
 
 Leave **Edit speech into tighter Shorts** enabled to find moments, then choose their real hook, useful explanation and ending. The editor reuses the transcript and can remove selected internal phrases. Its checked decision is saved separately from the original video and transcript. Open a clip to render only that selected edit.

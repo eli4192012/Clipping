@@ -1,3 +1,11 @@
+# v5.23 · Local example library
+
+- Adds **Example library** in the sidebar. Browse supplied clips, actual posted titles, opening text, saved transcripts and sampled frames, with notes on what works and what to avoid copying.
+- Keeps good patterns, mixed examples and patterns to avoid separately labeled. Editable notes and review status save locally. Analytics show views, engaged views, stayed-to-watch and average-viewed percentages with their export period; unconfirmed clip-to-YouTube matches remain visibly marked.
+- Seeds this Mac's library with the seven supplied clips and existing review material, reusing their transcripts without transcription or AI inference. Add more video examples, supply a transcript if available, search/filter the library and download its JSON. Adding the same clip preserves its previous notes.
+- Stores the library under data/example-library/, outside Git. Original imported clips remain referenced at their existing paths; sampled frames and transcripts are copied into the library. Uploaded new examples get their own local media copy. Missing originals leave notes and transcripts available.
+- This is step 1 only: the reference library does not change clip selection, cuts, opening text, social titles, analysis caches or model weights. See [validation](V523_VALIDATION.md).
+
 # v5.22 · Hook titles and fresh descriptions
 
 - Opening **Social media** now writes missing YouTube posting text automatically once. It uses the selected local editor and the final clip's transcript; viewing Edit or Look does not run this writing task.

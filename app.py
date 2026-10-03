@@ -41,7 +41,7 @@ st.session_state.setdefault('page','library')
 page=st.session_state.page
 stages=['source','settings','processing','complete','results','editor']
 active=0 if page=='source' else 1 if page=='settings' else 2 if page=='processing' else 3
-if page not in ('library','source','accounts','social_history','combine'):
+if page not in ('library','source','accounts','social_history','combine','examples'):
     st.markdown('<nav class="steps" aria-label="Project progress">'+ '<span class="step-connector" aria-hidden="true">—</span>'.join(f'<span class="step {"active" if i==active else "done" if i<active else ""}" '+('aria-current="step"' if i==active else '')+f'><span class="step-number">{"✓" if i<active else f"{i+1:02}"}</span>{name}</span>' for i,name in enumerate(['Add video','Make it yours','Find moments','Review clips']))+'</nav>',unsafe_allow_html=True)
 
 
@@ -66,6 +66,7 @@ with st.sidebar:
     if page!='processing' and st.button('My projects',icon=':material/home:',use_container_width=True,type='primary' if page=='library' else 'secondary'):go('library')
     if page!='processing' and st.button('＋ New project',icon=':material/add_circle:',use_container_width=True,type='primary' if page=='source' else 'secondary'):go('source')
     if page!='processing' and st.button('Combine clips',icon=':material/playlist_add:',use_container_width=True,type='primary' if page=='combine' else 'secondary'):go('combine')
+    if page!='processing' and st.button('Example library',icon=':material/bookmarks:',use_container_width=True,type='primary' if page=='examples' else 'secondary'):go('examples')
     if page!='processing' and st.button('Accounts',icon=':material/group:',use_container_width=True):go('accounts')
     if page!='processing' and st.button('Publishing history',icon=':material/history:',use_container_width=True):go('social_history')
     st.divider()
@@ -74,6 +75,11 @@ with st.sidebar:
             st.write(f"{'✓' if ready else '○'} {name}")
         st.caption('Missing a model? Run Download Models.command in the Clipping folder.')
     st.markdown('<div class="studio-note"><strong><span class="local-dot"></span>Local by default.</strong><br>Only clips you choose to publish leave this Mac.</div>',unsafe_allow_html=True)
+
+if page=='examples':
+    from example_library_ui import show as show_examples
+    show_examples(ROOT)
+    st.stop()
 
 if page=='combine':
     from combined_video_ui import show as show_combined_video
