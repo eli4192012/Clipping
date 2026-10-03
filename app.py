@@ -369,7 +369,7 @@ if page=='editor':
     index=st.session_state.clip_index;candidate=dict(candidates[index]);usage_candidate=dict(candidate)
     st.caption(f'CLIP {index+1:02} OF {len(candidates):02}')
     heading=st.empty();preview=st.container()
-    edit_tab,look_tab,post_tab,advanced_tab=st.tabs(['Edit','Look','Post','Advanced'])
+    edit_tab,look_tab,post_tab,advanced_tab=st.tabs(['Edit','Look','Social media','Advanced'])
     transcript_path=transcript_file(folder,settings);transcript=json.loads(transcript_path.read_text())
     base_edit_id=f"{candidate['start']}-{candidate['end']}"
     from shorts_ui import choose_edit
@@ -482,7 +482,7 @@ if page=='editor':
     except Exception as error:
         with preview:st.error(f'Could not render the clip: {error}')
     with post_tab:
-        posting_copy=post_form(folder,package)
+        posting_copy=post_form(folder,package,settings)
         if video is not None and video.is_file():
             if download_area is not None:
                 from download_names import clip_filename

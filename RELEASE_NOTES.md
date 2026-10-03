@@ -1,3 +1,11 @@
+# v5.20 · AI posting titles with inline hashtags
+
+- Renames the clip's Post tab to **Social media** and adds **Generate title & description with AI** to its YouTube posting package. The selected local 4B editor writes the headline and a short final-clip summary, then independently checks them against the final transcript.
+- Hashtags are part of the title, within YouTube's 100-character limit. The description summarizes the clip without a separate hashtag block. Existing separate hashtags display inline in titles or captions; separate hashtag input fields are removed.
+- Keeps writing on demand, with model/final-clip caches and an explicit **Generate fresh text** option. Failed generation preserves saved text. No transcription, video rerender, cloud AI or social-account connection is needed to generate copy.
+- Retains editable posting fields and existing reviewed publishing drafts. **Use current posting text in this draft** explicitly copies updated text into an editable draft; saving/reviewing and publishing remain separate user actions.
+- Speechless clips use manual posting text. Model summaries and source checks can be wrong; review the wording before posting. Sports vision, source videos, caption timing, opening overlays and combined videos keep their existing behavior.
+
 # v5.19 · Qwen3.5 local AI editor option
 
 - Installs Qwen3.5-4B in 4-bit form locally, with a pinned model revision and an editor-only setup command. No account or paid API is required. Models are never downloaded during processing.

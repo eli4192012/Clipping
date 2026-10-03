@@ -129,8 +129,8 @@ def platform_default_copy(platform,copy):
     """Only defaults for NEW drafts; existing reviewed text remains authoritative."""
     post=copy.get('platforms',{}).get('Instagram Reels') if platform=='instagram' else None
     if post:
-        return dict(title=copy['title'],description=post.get('caption','')+
-            ('\n\n'+' '.join(post.get('hashtags',[])) if post.get('hashtags') else ''))
+        from social_copy import inline_caption
+        return dict(title=copy['title'],description=inline_caption(post.get('caption',''),post.get('hashtags',[])))
     return dict(title=copy['title'],description=copy['description'])
 
 
@@ -145,6 +145,12 @@ def composer(folder,run,candidate,video,render_id,copy):
         key=store.identity(folder,run,candidate,account_id,render_id);draft=store.get(key)
         if draft is None or draft['status']=='Draft':
             initial=draft or dict(platform_default_copy(account['platform'],copy),privacy='private',made_for_kids=None,share_to_feed=True)
+            override_key='draft-copy-override-'+key
+            suggested=platform_default_copy(account['platform'],copy)
+            if draft and any(draft.get(k)!=suggested[k] for k in ('title','description')):
+                if st.button('Use current posting text in this draft',key='apply-copy-'+key):
+                    st.session_state[override_key]=suggested;st.rerun()
+            if override_key in st.session_state:initial=dict(initial,**st.session_state[override_key])
             with st.form('social-draft-'+key):
                 title=st.text_input('YouTube title' if account['platform']=='youtube' else 'Draft title · only for your records',value=initial['title'],max_chars=100)
                 description=st.text_area('Description' if account['platform']=='youtube' else 'Instagram caption',value=initial['description'],height=150)
@@ -159,7 +165,7 @@ def composer(folder,run,candidate,video,render_id,copy):
                 submitted=st.form_submit_button('Save draft & review')
             if submitted:
                 new=dict(id=key,folder=str(folder),run=str(run),candidate={'start':candidate['start'],'end':candidate['end']},render_id=render_id,video=str(video),file_size=Path(video).stat().st_size,file_mtime=Path(video).stat().st_mtime_ns,account_id=account_id,account_name=account['name'],platform=account['platform'],title=title.strip(),description=description,privacy=privacy,made_for_kids=kids,share_to_feed=feed,status='Draft')
-                try:store.validate(new);store.save_draft(new);st.rerun()
+                try:store.validate(new);store.save_draft(new);st.session_state.pop(override_key,None);st.rerun()
                 except ValueError as e:st.error(str(e))
         if draft:draft_panel(draft)
 

@@ -8,5 +8,5 @@ class PlatformCopyTests(unittest.TestCase):
         self.assertEqual(platform_default_copy('instagram',legacy),legacy)
         copy=dict(legacy,platforms={'Instagram Reels':dict(caption='Specific Instagram caption',hashtags=['#London'])})
         self.assertEqual(platform_default_copy('youtube',copy),legacy)
-        self.assertEqual(platform_default_copy('instagram',copy),dict(title=legacy['title'],description='Specific Instagram caption\n\n#London'))
+        self.assertEqual(platform_default_copy('instagram',copy),dict(title=legacy['title'],description='Specific Instagram caption #London'))
         self.assertEqual(legacy,dict(title='Existing manual title',description='Existing manual description'))

@@ -49,31 +49,58 @@ def look_form(style,package,words,mode,identity,ranged=False):
     return (updated,True) if submitted else (style,False)
 
 
-def post_form(folder,package):
+def post_form(folder,package,settings=None):
     import streamlit as st
+    from social_copy import inline_title,inline_caption,get_copy,identity
+    from local_editor import LABELS,installed
     saved_path=Path(folder)/'platform-posts-v517.json'
     saved=read(saved_path,{})
-    key=package['fingerprint'];posts=saved.get(key,package['posting'])
-    st.caption('Copy the package for your platform using its code-block copy button. Text is grounded in this final transcript; hashtags do not guarantee reach.')
+    key=package['fingerprint'];posts=saved.get(key,package['posting']);settings=settings or {}
+    ai_key,model=identity(package,settings)
+    st.caption('Generate posting text from this finished clip, then review or edit it. Hashtags belong in the title; the description explains the clip.')
     for platform in ('YouTube Shorts','TikTok','Instagram Reels'):
         post=posts.get(platform,package['posting'][platform])
         with st.expander(platform+' posting package',expanded=platform=='YouTube Shorts'):
-            parts=([post.get('title',''),post.get('description','')] if platform=='YouTube Shorts' else [post.get('caption','')])+[' '.join(post.get('hashtags',[]))]
+            if platform=='YouTube Shorts':
+                st.caption('AI writer: '+LABELS[model]+' · runs locally on this Mac')
+                if not package['final_transcript'].strip():st.info('This clip has no speech transcript. Enter posting text manually.')
+                if not installed(model):st.info('The selected AI editor is missing. Install it or choose the previous editor in project settings.')
+                a,b=st.columns(2)
+                ready=bool(package['final_transcript'].strip()) and installed(model)
+                generate=a.button('Generate title & description with AI',key='ai-post-'+key,disabled=not ready)
+                fresh=b.button('Generate fresh text',key='fresh-ai-post-'+key,disabled=not ready)
+                if generate or fresh:
+                    from ui_jobs import run_job
+                    try:
+                        result=run_job('social-copy-'+ai_key,lambda update:get_copy(folder,package,settings,update,force=fresh),60)
+                        posts=dict(posts,**{platform:dict(title=result['title'],description=result['description'],hashtags=[],ai_model=result['editor_model'])})
+                        saved[key]=posts;write(saved_path,saved)
+                        # Set widget state before drawing it, including on a cached generation.
+                        st.session_state['youtube-title-'+key]=result['title']
+                        st.session_state['youtube-description-'+key]=result['description']
+                        st.rerun()
+                    except Exception as error:st.error('Could not generate posting text: '+str(error))
+                if post.get('ai_model'):st.caption('Saved AI text · '+post['ai_model'].split(':',1)[0]+'. Review the wording before posting.')
+                shown_title=inline_title(post.get('title',''),post.get('hashtags',[]))
+                parts=[shown_title,post.get('description','')]
+            else:
+                shown_caption=inline_caption(post.get('caption',''),post.get('hashtags',[]))
+                parts=[shown_caption]
             st.code('\n\n'.join(p for p in parts if p),language=None,wrap_lines=True)
             with st.form('post-'+key+platform):
                 if platform=='YouTube Shorts':
-                    title=st.text_input('YouTube title',post.get('title',''),max_chars=100)
-                    description=st.text_area('YouTube description',post.get('description',''),max_chars=2000)
+                    title=st.text_input('YouTube title',shown_title,max_chars=100,key='youtube-title-'+key,help='Include hashtags here. The full title, including hashtags, must fit 100 characters.')
+                    description=st.text_area('YouTube description',post.get('description',''),max_chars=2000,key='youtube-description-'+key)
+                    st.caption(f'{len(title)}/100 characters, including hashtags.')
                     updated=dict(title=title,description=description)
                 else:
-                    caption=st.text_area(platform+' caption',post.get('caption',''),max_chars=2000)
+                    caption=st.text_area(platform+' caption',shown_caption,max_chars=2000)
                     updated=dict(caption=caption)
-                tags=st.text_input(platform+' hashtags',' '.join(post.get('hashtags',[])))
-                updated['hashtags']=[t for t in tags.split() if t.startswith('#')][:8]
+                updated['hashtags']=[]
                 if st.form_submit_button('Save '+platform+' text'):
                     saved[key]=dict(posts,**{platform:updated});write(saved_path,saved);st.rerun()
     youtube=posts['YouTube Shorts']
-    return dict(title=youtube['title'],description=youtube['description']+ ('\n\n'+' '.join(youtube.get('hashtags',[])) if youtube.get('hashtags') else ''),platforms=posts)
+    return dict(title=inline_title(youtube['title'],youtube.get('hashtags',[])),description=youtube['description'],platforms=posts)
 
 
 def advanced(package,candidate,words,ranges):
