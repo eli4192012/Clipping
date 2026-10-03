@@ -86,7 +86,7 @@ class AISocialCopyUITests(unittest.TestCase):
             app.run()
             self.assertFalse(app.exception)
             reload.assert_called_once_with(packaging_ui)
-            self.assertEqual(packaging_ui.POST_FORM_API,2)
+            self.assertEqual(packaging_ui.POST_FORM_API,3)
             self.assertTrue(any(b.label=='Generate title & description with AI' for b in app.button))
             self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My saved title #Speed')
         self.assertEqual((self.folder/'platform-posts-v517.json').read_bytes(),saved)
@@ -96,6 +96,69 @@ class AISocialCopyUITests(unittest.TestCase):
         with patch('importlib.reload',side_effect=AssertionError('Current posting code should not be reloaded')):
             app=self.app.run();self.assertFalse(app.exception)
             app.run();self.assertFalse(app.exception)
+        self.assertEqual(self.export.call_count,1)
+
+    def open_social(self,app):
+        app.session_state['clip-editor-tab-'+str(self.analysis)+'-0']='Social media'
+        return app.run()
+
+    def test_opening_social_generates_once_without_using_transcript_as_default_description(self):
+        app=self.app.run();self.assertFalse(app.exception)
+        self.assertEqual(next(t for t in app.text_area if t.label=='YouTube description').value,'')
+        with patch('upgrades.worker',return_value=checked_copy()) as worker:
+            self.open_social(app)
+            self.assertFalse(app.exception);worker.assert_called_once()
+        self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,checked_copy()['title'])
+        self.assertTrue(any(t.value=='Keep your speed and momentum' for t in app.title))
+        self.assertEqual(self.export.call_count,1)
+        self.open_social(self.new_app())  # Saved AI copy reopens without another worker call.
+        self.assertEqual(self.export.call_count,1)
+
+    def test_failed_auto_generation_is_not_retried_on_each_rerun(self):
+        app=self.app.run()
+        with patch('upgrades.worker',side_effect=RuntimeError('No checked text')) as worker:
+            self.open_social(app)
+            self.assertFalse(app.exception);worker.assert_called_once()
+        app.run();self.assertFalse(app.exception)
+        self.assertEqual(next(t for t in app.text_area if t.label=='YouTube description').value,'')
+        with patch('upgrades.worker',return_value=checked_copy()) as worker:
+            next(b for b in app.button if b.label=='Generate title & description with AI').click().run()
+            self.assertFalse(app.exception);worker.assert_called_once()
+
+    def test_legacy_quoted_description_is_rewritten_without_replacing_edited_title_or_other_platform(self):
+        self.app.run()
+        package=json.loads(next((self.folder/'packaging-v517').glob('*.json')).read_text())
+        old=dict(package['posting']['YouTube Shorts'],title='My hand-written title')
+        posts={'YouTube Shorts':old,'TikTok':dict(caption='My reviewed TikTok caption',hashtags=[])}
+        (self.folder/'platform-posts-v517.json').write_text(json.dumps({package['fingerprint']:posts}))
+        with patch('upgrades.worker',return_value=checked_copy()) as worker:
+            app=self.open_social(self.new_app());self.assertFalse(app.exception);worker.assert_called_once()
+        from social_copy import inline_title
+        self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,inline_title(old['title'],old['hashtags']))
+        self.assertEqual(next(t for t in app.text_area if t.label=='YouTube description').value,checked_copy()['description'])
+        saved=json.loads((self.folder/'platform-posts-v517.json').read_text())[package['fingerprint']]
+        self.assertEqual(saved['TikTok'],posts['TikTok'])
+
+    def test_saved_manual_summary_and_title_are_not_automatically_replaced(self):
+        app=self.app.run()
+        next(t for t in app.text_input if t.label=='YouTube title').set_value('My reviewed title')
+        next(t for t in app.text_area if t.label=='YouTube description').set_value('My reviewed teaser.')
+        next(b for b in app.button if b.label=='Save YouTube Shorts text').click().run()
+        saved=(self.folder/'platform-posts-v517.json').read_bytes()
+        self.open_social(app);self.assertFalse(app.exception)
+        self.assertEqual((self.folder/'platform-posts-v517.json').read_bytes(),saved)
+        self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My reviewed title')
+
+    def test_alternative_hook_is_saved_and_keeps_description_without_extra_inference(self):
+        with patch('upgrades.worker',return_value=checked_copy()):app=self.open_social(self.app)
+        self.assertFalse(app.exception)
+        choice=checked_copy()['title_options'][1]
+        next(b for b in app.button if b.label==choice).click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,choice)
+        self.assertEqual(next(t for t in app.text_area if t.label=='YouTube description').value,checked_copy()['description'])
+        reopened=self.open_social(self.new_app());self.assertFalse(reopened.exception)
+        self.assertEqual(next(t for t in reopened.text_input if t.label=='YouTube title').value,choice)
         self.assertEqual(self.export.call_count,1)
 
 

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from project_store import read, write
 
-POST_FORM_API=2
+POST_FORM_API=3
 
 
 def look_form(style,package,words,mode,identity,ranged=False):
@@ -51,15 +51,33 @@ def look_form(style,package,words,mode,identity,ranged=False):
     return (updated,True) if submitted else (style,False)
 
 
-def post_form(folder,package,settings=None):
+def post_form(folder,package,settings=None,active=False):
     import streamlit as st
-    from social_copy import inline_title,inline_caption,get_copy,identity
+    import social_copy
+    if social_copy.VERSION!='social-copy-3':
+        import importlib
+        importlib.reload(social_copy)
+    from social_copy import VERSION,inline_title,inline_caption,get_copy,identity,refresh_fields
     from local_editor import LABELS,installed
     saved_path=Path(folder)/'platform-posts-v517.json'
     saved=read(saved_path,{})
-    key=package['fingerprint'];posts=saved.get(key,package['posting']);settings=settings or {}
+    key=package['fingerprint'];settings=settings or {}
+    stored=saved.get(key,{})
+    posts=dict(package['posting'],**stored)
+    default=package['posting']['YouTube Shorts']
+    legacy=stored.get('YouTube Shorts',{})
+    if legacy.get('copy_origin')!='manual' and st.session_state.get('youtube-description-'+key)==default.get('description'):
+        st.session_state['youtube-description-'+key]=''
+    if not legacy and st.session_state.get('youtube-title-'+key) in (default.get('title'),inline_title(default.get('title',''),default.get('hashtags',[]))):
+        st.session_state['youtube-title-'+key]=''
+    # A transcript quote is legacy seed data, not an AI-written description.
+    if 'YouTube Shorts' not in stored:posts['YouTube Shorts']=dict(title='',description='',hashtags=[])
+    elif stored['YouTube Shorts'].get('copy_origin')!='manual' and stored['YouTube Shorts'].get('description')==default.get('description'):
+        posts['YouTube Shorts']=dict(stored['YouTube Shorts'],description='')
     ai_key,model=identity(package,settings)
-    st.caption('Generate posting text from this finished clip, then review or edit it. Hashtags belong in the title; the description explains the clip.')
+    refresh=refresh_fields(stored.get('YouTube Shorts'),default,ai_key)
+    attempt_key='auto-social-copy-'+ai_key
+    st.caption('AI writes a hook title and a short teaser when you open Social media. Review the text, try another title idea, or edit it yourself.')
     for platform in ('YouTube Shorts','TikTok','Instagram Reels'):
         post=posts.get(platform,package['posting'][platform])
         with st.expander(platform+' posting package',expanded=platform=='YouTube Shorts'):
@@ -71,18 +89,33 @@ def post_form(folder,package,settings=None):
                 ready=bool(package['final_transcript'].strip()) and installed(model)
                 generate=a.button('Generate title & description with AI',key='ai-post-'+key,disabled=not ready)
                 fresh=b.button('Generate fresh text',key='fresh-ai-post-'+key,disabled=not ready)
-                if generate or fresh:
+                auto=active and ready and bool(refresh) and not st.session_state.get(attempt_key)
+                if auto or generate or fresh:
                     from ui_jobs import run_job
+                    st.session_state[attempt_key]=True
                     try:
-                        result=run_job('social-copy-'+ai_key,lambda update:get_copy(folder,package,settings,update,force=fresh),60)
-                        posts=dict(posts,**{platform:dict(title=result['title'],description=result['description'],hashtags=[],ai_model=result['editor_model'])})
+                        result=run_job('social-copy-'+ai_key,lambda update:get_copy(folder,package,settings,update,force=fresh),75)
+                        updated=dict(title=result['title'],description=result['description'],hashtags=[],title_options=result['title_options'],ai_model=result['editor_model'],ai_version=VERSION,ai_key=ai_key,copy_origin='ai')
+                        if auto and refresh!={'title','description'}:
+                            for field in ('title','description'):
+                                if field not in refresh:updated[field]=inline_title(post.get(field,''),post.get('hashtags',[])) if field=='title' else post.get(field,'')
+                            updated['copy_origin']='manual'
+                        posts=dict(posts,**{platform:updated})
                         saved[key]=posts;write(saved_path,saved)
                         # Set widget state before drawing it, including on a cached generation.
-                        st.session_state['youtube-title-'+key]=result['title']
-                        st.session_state['youtube-description-'+key]=result['description']
+                        st.session_state['youtube-title-'+key]=updated['title']
+                        st.session_state['youtube-description-'+key]=updated['description']
                         st.rerun()
                     except Exception as error:st.error('Could not generate posting text: '+str(error))
-                if post.get('ai_model'):st.caption('Saved AI text · '+post['ai_model'].split(':',1)[0]+'. Review the wording before posting.')
+                if not post.get('title') or not post.get('description'):st.info('Posting text is ready after AI generation, or you can write it below. The transcript is not used as the description.')
+                if post.get('ai_model') and post.get('copy_origin')!='manual':st.caption('AI hook selected · '+post['ai_model'].split(':',1)[0]+'. Review the wording before posting.')
+                if len(post.get('title_options',[]))>1:
+                    with st.expander('More title ideas'):
+                        for i,idea in enumerate(post['title_options']):
+                            if st.button(idea,key=f'title-idea-{key}-{i}',disabled=idea==post.get('title')):
+                                selected=dict(post,title=idea,hashtags=[],copy_origin='manual')
+                                saved[key]=dict(posts,**{platform:selected});write(saved_path,saved)
+                                st.session_state['youtube-title-'+key]=idea;st.rerun()
                 shown_title=inline_title(post.get('title',''),post.get('hashtags',[]))
                 parts=[shown_title,post.get('description','')]
             else:
@@ -98,7 +131,8 @@ def post_form(folder,package,settings=None):
                 else:
                     caption=st.text_area(platform+' caption',shown_caption,max_chars=2000)
                     updated=dict(caption=caption)
-                updated['hashtags']=[]
+                updated['hashtags']=[];updated['copy_origin']='manual'
+                if platform=='YouTube Shorts' and post.get('title_options'):updated['title_options']=post['title_options']
                 if st.form_submit_button('Save '+platform+' text'):
                     saved[key]=dict(posts,**{platform:updated});write(saved_path,saved);st.rerun()
     youtube=posts['YouTube Shorts']

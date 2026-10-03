@@ -1,3 +1,10 @@
+# v5.22 · Hook titles and fresh descriptions
+
+- Opening **Social media** now writes missing YouTube posting text automatically once. It uses the selected local editor and the final clip's transcript; viewing Edit or Look does not run this writing task.
+- Proposes different hooks around the clip's question, contrast and takeaway. A separate source check chooses a supported title and discards unsupported suggestions. **More title ideas** allows choosing another checked hook when available; hashtags remain inside each title.
+- Descriptions explain the point in fresh words. Copied transcript passages and unsupported absolute claims are rejected instead of becoming the description. Legacy quoted defaults are replaced, preserving separately edited titles and other platform packages; saved manual copy stays as written.
+- New writer caches avoid reusing earlier weak AI copy without clearing existing caches or media. Failed automatic generation can be retried explicitly and does not loop on reruns. No generation publishes a video. Requires Streamlit 1.64 or newer, already present in the pinned local runtime. See [validation](V522_VALIDATION.md).
+
 # v5.21 · Refresh older posting controls
 
 - Fixes the Social media tab failing with "post_form() takes 2 positional arguments but 3 were given" when an already-running server retains the previous posting form.

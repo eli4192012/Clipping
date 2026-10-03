@@ -369,7 +369,7 @@ if page=='editor':
     index=st.session_state.clip_index;candidate=dict(candidates[index]);usage_candidate=dict(candidate)
     st.caption(f'CLIP {index+1:02} OF {len(candidates):02}')
     heading=st.empty();preview=st.container()
-    edit_tab,look_tab,post_tab,advanced_tab=st.tabs(['Edit','Look','Social media','Advanced'])
+    edit_tab,look_tab,post_tab,advanced_tab=st.tabs(['Edit','Look','Social media','Advanced'],key='clip-editor-tab-'+str(path)+'-'+str(index),on_change='rerun')
     transcript_path=transcript_file(folder,settings);transcript=json.loads(transcript_path.read_text())
     base_edit_id=f"{candidate['start']}-{candidate['end']}"
     from shorts_ui import choose_edit
@@ -435,8 +435,8 @@ if page=='editor':
     from edit_timeline import remap_words,timeline_duration
     final_words=remap_words(export_words,final_ranges)
     import packaging_ui
-    # A server opened before the update can retain the two-argument posting form.
-    if getattr(packaging_ui,'POST_FORM_API',0)<2:
+    # An already-running server can retain older posting controls.
+    if getattr(packaging_ui,'POST_FORM_API',0)<3:
         import importlib
         importlib.reload(packaging_ui)
     from packaging_ui import look_form,post_form,advanced
@@ -487,7 +487,10 @@ if page=='editor':
     except Exception as error:
         with preview:st.error(f'Could not render the clip: {error}')
     with post_tab:
-        posting_copy=post_form(folder,package,settings)
+        posting_copy=post_form(folder,package,settings,active=post_tab.open)
+        if posting_copy.get('title'):
+            from social_copy import TAG
+            heading.title(TAG.sub('',posting_copy['title']).strip())
         if video is not None and video.is_file():
             if download_area is not None:
                 from download_names import clip_filename

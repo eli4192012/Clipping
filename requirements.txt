@@ -1,4 +1,4 @@
-streamlit>=1.50,<2
+streamlit>=1.64,<2
 faster-whisper>=1.2,<2
 imageio-ffmpeg>=0.6,<1
 mlx-lm>=0.31.3,<1
