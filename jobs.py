@@ -15,14 +15,16 @@ def analysis_path(project, settings):
     source_tag=f'{stat.st_size}-{stat.st_mtime_ns}'
     variant='vision'+str(settings['windows']) if mode=='Sports' and settings['vision'] else 'ai' if settings['semantic'] else 'basic'
     editorial='-shorts1' if settings.get('shorts_editor') and mode!='Sports' else ''
-    return Path(project['folder'])/f"clips-v{VERSION}-{mode}-{settings['minimum']}-{settings['maximum']}-all-{variant}-c{settings.get('coverage',1.0 if mode!='Sports' else .35)}-v514{editorial}-{signature(settings)}-{source_tag}{cache_tag(settings)}.json"
+    from local_editor import cache_tag as editor_tag
+    return Path(project['folder'])/f"clips-v{VERSION}-{mode}-{settings['minimum']}-{settings['maximum']}-all-{variant}-c{settings.get('coverage',1.0 if mode!='Sports' else .35)}-v514{editorial}-{signature(settings)}-{source_tag}{cache_tag(settings)}{editor_tag(settings)}.json"
 
 
 def estimate_seconds(project, settings):
     folder=Path(project['folder'])
     if analysis_path(project,settings).exists():return 1
     history=folder/'ui-timing.json'
-    key=settings['mode']+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and settings['mode']!='Sports' else '')
+    from local_editor import cache_tag as editor_tag
+    key=settings['mode']+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and settings['mode']!='Sports' else '')+editor_tag(settings)
     if history.exists():
         measured=json.loads(history.read_text()).get(key)
         if measured: return measured
@@ -117,12 +119,12 @@ def analyze(project,settings,progress):
             candidates=refine_sports_boundaries(sports_candidates(transcript['sentences'],samples,total,minimum,maximum),samples,transcript['sentences'],total)
         elif settings['semantic']:
             progress(.62,'Grouping topics and checking complete conversations locally')
-            candidates=worker('topics',dict(sentences=transcript['sentences'],words=transcript['words'] if settings.get('shorts_editor') else [],shorts_editor=settings.get('shorts_editor',False),minimum=minimum,maximum=maximum,mode=mode,quality=settings.get('quality','Balanced'),cache_dir=str(folder/'topic-reviews-v37'),categories=settings.get('categories',[])),timeout=3600,progress=lambda p,label:progress(.62+.31*p,label))
+            candidates=worker('topics',dict(sentences=transcript['sentences'],words=transcript['words'] if settings.get('shorts_editor') else [],shorts_editor=settings.get('shorts_editor',False),minimum=minimum,maximum=maximum,mode=mode,quality=settings.get('quality','Balanced'),editor_model=settings.get('editor_model'),cache_dir=str(folder/'topic-reviews-v37'),categories=settings.get('categories',[])),timeout=3600,progress=lambda p,label:progress(.62+.31*p,label))
         else:
             candidates=speech_candidates(transcript['sentences'],minimum,maximum,mode)
         if settings['semantic'] and mode!='Sports' and candidates and not all(c.get('topic_group') for c in candidates):
             progress(.65,'Reviewing meaning with the selected local model')
-            candidates=worker('review',dict(sentences=transcript['sentences'],candidates=candidates,mode=mode,quality=settings.get('quality','Balanced'),categories=settings.get('categories',[])))
+            candidates=worker('review',dict(sentences=transcript['sentences'],candidates=candidates,mode=mode,quality=settings.get('quality','Balanced'),editor_model=settings.get('editor_model'),categories=settings.get('categories',[])))
         elif mode!='Sports' and not settings['semantic']:
             for c in candidates:
                 c.update(title=c.get('title',c['text'][:65]),passed=False,reason=c.get('reason','Selected from transcript boundaries.'),concern='Local meaning review was not enabled.')
@@ -161,7 +163,8 @@ def analyze(project,settings,progress):
         if not settings['vision']:diagnostics.update(found=before_count,reviewed=0,review_succeeded=0,note='Motion-only drafts; local AI frame review disabled.')
         path.with_suffix('.diagnostics.json').write_text(json.dumps(diagnostics,indent=2))
     history=folder/'ui-timing.json';data=json.loads(history.read_text()) if history.exists() else {}
-    key=mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')
+    from local_editor import cache_tag as editor_tag
+    key=mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)
     if not isinstance(prior,dict):
         data[key]=time.monotonic()-begun;history.write_text(json.dumps(data))
     from project_store import save_run

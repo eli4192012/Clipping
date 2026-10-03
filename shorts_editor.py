@@ -265,13 +265,15 @@ Return JSON {"standalone":boolean,"faithful":boolean,"complete_ending":boolean,"
 
 
 def edit_candidate(candidate, sentences, words, maximum, quality, cache_dir, load_bundle,
-                   variant='Balanced', baseline=None, progress=None):
+                   variant='Balanced', baseline=None, progress=None, editor_identity=None):
     if variant not in VARIANTS: raise ValueError('Unknown edit variant.')
     units = editorial_units(candidate, sentences, words)
     context = nearby_context(candidate, sentences)
     prompt = plan_prompt(candidate, units, context, maximum, variant, baseline)
-    key = hashlib.sha256(json.dumps([EDITOR_VERSION, REVIEW_VERSION, candidate['start'], candidate['end'], units,
-        context, maximum, quality, variant, baseline, prompt], sort_keys=True).encode()).hexdigest()
+    inputs = [EDITOR_VERSION, REVIEW_VERSION, candidate['start'], candidate['end'], units,
+        context, maximum, quality, variant, baseline, prompt]
+    if editor_identity: inputs.append(editor_identity)
+    key = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
     path = Path(cache_dir) / (key + '.json') if cache_dir else None
     cached = read(path, None) if path else None
     if isinstance(cached, dict) and cached.get('edit_plan', {}).get('version') == EDITOR_VERSION:
@@ -317,6 +319,7 @@ def edit_candidate(candidate, sentences, words, maximum, quality, cache_dir, loa
     if progress: progress(.6, 'Checking the final cut against the source')
     verdict = check_plan(plan, candidate, context, bundle)
     plan['processing_seconds']=dict(model_load=loaded-begun,planning=planned-loaded,checking=time.monotonic()-planned)
+    if editor_identity: plan['editor_model'] = editor_identity
     if attempt_path: write(attempt_path, dict(version=EDITOR_VERSION, units=units, proposal=raw, compiled_plan=plan, validation=verdict, variant=variant))
     from audience_quality import validated_review,CRITERIA
     normalized=' '.join(plan['final_transcript'].casefold().split())

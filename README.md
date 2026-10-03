@@ -38,13 +38,17 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.18**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.19**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
 
 Saved videos can be reopened from the start screen. Settings and previous results are kept locally. Initial processing estimates use video length and selected review options; later estimates use this video's previous measured processing time. Percentages represent processing milestones, not a promise of constant speed.
 
 ## Local models
 
-Balanced uses Whisper base locally on the CPU; Higher quality uses the local Whisper large-v3-turbo model. The Shorts Editor uses Qwen3 4B 4-bit through MLX in either mode. The older continuous-clip workflow can use Qwen3 1.7B in Balanced. Models are downloaded once; subsequent processing uses their local files. No transcript or media is sent to a model service. Streamlit telemetry is disabled and the server binds only to localhost.
+Balanced uses Whisper base locally on the CPU; Higher quality uses the local Whisper large-v3-turbo model. Under **Advanced settings · duration, coverage & models → AI editor**, choose **Qwen3 · 4B (recommended)** or **Qwen3.5 · 4B (experimental)**. Both use 4-bit local MLX inference and apply in either processing mode. Qwen3 remains the default: the initial saved-video comparison did not establish more reliable edits with Qwen3.5. Older saved settings retain their original model choice, including Qwen3 1.7B for legacy Balanced continuous clips.
+
+Qwen3.5 is downloaded once to `models/qwen3.5-4b` (about 3.06 GB) from a pinned MLX Community revision. On this Mac the existing dependencies support it; no other AI application or account is required. To install only this editor, run `.venv/bin/python download_models.py --editor-only`; the normal model setup also installs it. Application processing never downloads missing weights. MLX LM loads only its text tower for transcript editing; this update does not change sports frame review or add AI ordering to combined videos.
+
+Changing the AI editor creates separate analysis, topic and edit-decision caches. Existing transcripts are reused, old results stay saved, and repeated work with the same model reopens cached decisions. Inference runs one model process at a time with the existing 3 GiB MLX limit, small prompt-prefill batches and a bounded context; oversized source neighborhoods fail for review instead of silently losing text. No transcript or media is sent to a model service. Streamlit telemetry is disabled and the server binds only to localhost. See [v5.19 validation](V519_VALIDATION.md) for comparison results and limitations.
 
 If models are missing, double-click **Download Models.command** while connected to the internet. Allow several GB of disk space for dependencies, models, source videos, and exports. English editorial review is recommended. Whisper can detect other languages, but this app's selection rules are English-oriented.
 
@@ -119,6 +123,7 @@ python3.13 -m venv .venv
 - Whisper models: https://github.com/openai/whisper (MIT)
 - MLX LM: https://github.com/ml-explore/mlx-lm (MIT)
 - Qwen3: https://huggingface.co/Qwen/Qwen3-1.7B (Apache 2.0); quantized distribution: https://huggingface.co/mlx-community/Qwen3-1.7B-4bit
+- Qwen3.5: https://huggingface.co/Qwen/Qwen3.5-4B (Apache 2.0); pinned 4-bit distribution: https://huggingface.co/mlx-community/Qwen3.5-4B-MLX-4bit/tree/32f3e8ecf65426fc3306969496342d504bfa13f3
 - Streamlit: https://github.com/streamlit/streamlit (Apache 2.0)
 - OpenCV YuNet face detection: https://github.com/opencv/opencv_zoo/tree/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet (MIT; model and license downloaded during explicit setup)
 - imageio-ffmpeg: https://github.com/imageio/imageio-ffmpeg (BSD-2-Clause). Its bundled FFmpeg binary has its own LGPL/GPL terms depending on build options: https://ffmpeg.org/legal.html

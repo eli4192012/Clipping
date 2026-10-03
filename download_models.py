@@ -2,6 +2,16 @@ from huggingface_hub import snapshot_download
 from engine import SPEECH, EDITOR
 
 if __name__ == "__main__":
+    import argparse
+    from local_editor import download_qwen35
+    parser=argparse.ArgumentParser(description='Download local models without uploading videos.')
+    parser.add_argument('--editor-only',action='store_true',help='Install only the pinned Qwen3.5 editor.')
+    args=parser.parse_args()
+    print('Downloading local Qwen3.5 4B editor (4-bit, about 3.06 GB).',flush=True)
+    download_qwen35()
+    if args.editor_only:
+        print('Qwen3.5 ready. Restart or refresh Clipping.',flush=True)
+        raise SystemExit(0)
     print("Downloading speech model (Whisper base). Videos are never uploaded.", flush=True)
     snapshot_download("Systran/faster-whisper-base", local_dir=str(SPEECH),
                       allow_patterns=["*.json", "*.bin", "*.txt"])

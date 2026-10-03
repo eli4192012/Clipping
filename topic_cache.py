@@ -20,6 +20,9 @@ def reviewed_topics(payload,load_bundle,progress=None):
         if bundle is None:bundle=load_bundle()
         return bundle
     folder=Path(payload['cache_dir']) if payload.get('cache_dir') else None
+    from local_editor import cache_folder,selected_editor,IDENTITIES
+    editor_identity=IDENTITIES[selected_editor(payload,large=bool(payload.get('shorts_editor')))] if payload.get('editor_model') else None
+    if folder and payload.get('editor_model'):folder=cache_folder(folder,payload['editor_model'])
     if folder:folder.mkdir(parents=True,exist_ok=True)
     if payload['mode']=='Interview':
         if payload.get('shorts_editor'):
@@ -52,7 +55,8 @@ def reviewed_topics(payload,load_bundle,progress=None):
             try:
                 result=edit_candidate(candidate,payload['sentences'],payload.get('words',[]),payload['maximum'],payload['quality'],
                     str(folder/'shorts') if folder else None,model,
-                    progress=lambda p,label:progress(.35+.65*(index+p)/max(1,len(candidates)),f'Moment {index+1} of {len(candidates)} · {label}'))
+                    progress=lambda p,label:progress(.35+.65*(index+p)/max(1,len(candidates)),f'Moment {index+1} of {len(candidates)} · {label}'),
+                    editor_identity=editor_identity)
             except (ValueError,TypeError,AttributeError,KeyError) as error:
                 # An unverified splice never silently becomes the recommended export.
                 rejected=candidate.get('context_uncertain',False) or candidate['end']-candidate['start']>payload['maximum']

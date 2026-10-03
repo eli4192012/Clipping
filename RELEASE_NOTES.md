@@ -1,3 +1,12 @@
+# v5.19 · Qwen3.5 local AI editor option
+
+- Installs Qwen3.5-4B in 4-bit form locally, with a pinned model revision and an editor-only setup command. No account or paid API is required. Models are never downloaded during processing.
+- Adds **AI editor** in Advanced settings. Qwen3.5 is available as an experimental option for topic discovery and Shorts planning/checking in either processing mode. Qwen3 4B remains recommended after the initial saved-video comparisons; a newer model is not automatically a better editor.
+- Separates model-specific analysis, topic and edit caches while reusing saved speech. Structured edit decisions identify their model. Existing videos, transcripts, exports and prior results are preserved.
+- Keeps the 3 GiB MLX limit and serial model workers, adds small prefill batches and a bounded prompt context without silently truncating source text.
+- Retains the existing source-fidelity checks. Invalid or rejected cuts remain unverified original drafts or are excluded; the new model cannot bypass those checks. Sports vision, visual packaging and combined-video ordering keep their existing behavior.
+- See V519_VALIDATION.md for real offline inference results, measured limits and automated checks.
+
 # v5.18 · Combine clips into longer videos
 
 - Adds Combine clips in the sidebar and collection, plus Add to combined video in the clip editor. Select finished clips from multiple projects, search/filter them, change their order and remove items without deleting their original files.

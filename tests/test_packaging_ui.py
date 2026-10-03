@@ -32,7 +32,8 @@ class PackagingUITests(unittest.TestCase):
  def test_review_screen_preserves_editor_and_uses_final_packages_without_model_work(self):
   app=self.app.run();self.assertFalse(app.exception)
   self.assertEqual([t.label for t in app.tabs],['Edit','Look','Post','Advanced'])
-  self.assertTrue(any(b.label=='v5.18' for b in app.button))
+  version=json.loads((ROOT/'version.json').read_text())
+  self.assertTrue(any(b.label==f"v{version['major']}.{version['minor']}" for b in app.button))
   self.assertEqual(self.export.call_args.kwargs['ranges'],self.primary['edit_plan']['ranges'])
   self.assertTrue(self.export.call_args.kwargs['presentation']['semantic_emphasis'])
   self.assertEqual(next(s for s in app.selectbox if s.label=='Visual pacing').value,'Subtle')

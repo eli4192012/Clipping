@@ -14,6 +14,7 @@ from jobs import analyze,analysis_path,estimate_seconds
 from ui_jobs import run_job,clock
 from review_ui import review_form,review_history
 from upgrades import TURBO,EDITOR4,VISION4,SPEAKERS,transcript_file
+from local_editor import QWEN35,CHOICES,LABELS,installed,preferred_editor
 
 st.set_page_config(page_title='Clipping · Your local studio',page_icon=str(ROOT/'assets/mark.svg'),layout='wide',initial_sidebar_state='expanded')
 version=json.loads((ROOT/'version.json').read_text())
@@ -23,7 +24,7 @@ install(st)
 @st.dialog('What changed',width='large')
 def release_report():
     st.markdown((ROOT/'RELEASE_NOTES.md').read_text())
-    validation=ROOT/'V518_VALIDATION.md'
+    validation=ROOT/f"V{version['major']}{version['minor']}_VALIDATION.md"
     if validation.exists():
         with st.expander('Test results and limitations'):
             st.markdown(validation.read_text())
@@ -69,7 +70,7 @@ with st.sidebar:
     if page!='processing' and st.button('Publishing history',icon=':material/history:',use_container_width=True):go('social_history')
     st.divider()
     with st.expander('Local tools & status'):
-        for name,ready in [('Speech',(SPEECH/'model.bin').exists()),('Meaning',(EDITOR/'.ready').exists()),('Sports vision',(VISION/'.ready').exists()),('Turbo speech',(TURBO/'.ready').exists()),('4B meaning',(EDITOR4/'.ready').exists()),('4B sports vision',(VISION4/'.ready').exists()),('Word alignment',(ROOT/'models/alignment/.ready').exists()),('Speaker detection',(SPEAKERS/'.ready').exists())]:
+        for name,ready in [('Speech',(SPEECH/'model.bin').exists()),('Meaning',(EDITOR/'.ready').exists()),('Sports vision',(VISION/'.ready').exists()),('Turbo speech',(TURBO/'.ready').exists()),('Qwen3.5 AI editor',installed(QWEN35)),('4B meaning',(EDITOR4/'.ready').exists()),('4B sports vision',(VISION4/'.ready').exists()),('Word alignment',(ROOT/'models/alignment/.ready').exists()),('Speaker detection',(SPEAKERS/'.ready').exists())]:
             st.write(f"{'✓' if ready else '○'} {name}")
         st.caption('Missing a model? Run Download Models.command in the Clipping folder.')
     st.markdown('<div class="studio-note"><strong><span class="local-dot"></span>Local by default.</strong><br>Only clips you choose to publish leave this Mac.</div>',unsafe_allow_html=True)
@@ -233,6 +234,9 @@ if page=='settings':
         if shorts_editor:st.caption('Finds a strong opening, removes unnecessary phrases, and checks the ending locally. Uses the larger local editor in both processing modes. Reuses your transcript; other versions are created on request.')
         st.caption('Portrait interviews default to automatic framing: a tighter person crop when suitable, otherwise the full picture over blurred video. Adjust the layout when reviewing.')
         with st.expander('Advanced settings · duration, coverage & models'):
+            editor_default=previous.get('editor_model') if previous.get('editor_model') in CHOICES else preferred_editor()
+            editor_model=st.selectbox('AI editor',CHOICES,index=CHOICES.index(editor_default),format_func=lambda key:LABELS[key],disabled=mode=='Sports')
+            if mode!='Sports':st.caption('Runs on this Mac. Qwen3.5 is available to compare; Qwen3 remains recommended after our saved-video checks. Changing editors reuses speech transcription and creates separate editing results.')
             minimum,maximum=st.slider('Preferred duration (seconds)',5,180,(previous['minimum'],previous['maximum']) if previous.get('mode')==mode else PROFILES[mode]['lengths'],step=5,key='duration-'+mode)
             st.caption('Complete interviews can be shorter. Sports drafts may extend for context. Suggestions do not overlap.')
             coverage=st.slider('Maximum share of the source to keep (%)',10,100,int((previous.get('coverage',.35 if mode=='Sports' else 1.0) if previous.get('mode')==mode else (.35 if mode=='Sports' else 1.0))*100),step=5) / 100
@@ -252,10 +256,11 @@ if page=='settings':
     if mode!='Sports' and football_hint(project['title'],sentences) and not interview_content(project['title'],sentences):st.warning('For on-field highlights, Sports mode reviews action. Interview mode follows the conversation.')
     if mode=='Sports' and interview_content(project['title'],sentences):st.info('For a sports interview, Interview mode is usually the better fit.')
     settings=dict(resource_defaults=1,shorts_editor=shorts_editor,categories=categories,category_selection=selected,auto_mode=automatic,video_type=detection,coverage=coverage,mode=mode,minimum=minimum,maximum=maximum,min_clips=min_clips,portrait=portrait,semantic=semantic,vision=vision,windows=windows,quality=quality,scenes=scenes,speakers=speakers,alignment=alignment,sports_discovery_version=3)
+    if mode!='Sports':settings['editor_model']=editor_model
     from project_store import write,read
     if read(folder/'ui-settings.json',{})!=settings:write(folder/'ui-settings.json',settings)
     st.caption(f'Estimated processing: about {clock(estimate_seconds(project,settings))}. Actual time varies with your Mac and video.')
-    ready=((TURBO/'.ready').exists() if quality=='Higher quality' else (SPEECH/'model.bin').exists()) and (not semantic or mode=='Sports' or ((EDITOR4 if shorts_editor or quality=='Higher quality' else EDITOR)/'.ready').exists()) and (mode!='Sports' or not vision or ((VISION4 if quality=='Higher quality' else VISION)/'.ready').exists())
+    ready=((TURBO/'.ready').exists() if quality=='Higher quality' else (SPEECH/'model.bin').exists()) and (not semantic or mode=='Sports' or installed(editor_model)) and (mode!='Sports' or not vision or ((VISION4 if quality=='Higher quality' else VISION)/'.ready').exists())
     if not ready:st.error('A required model is missing. Run Download Models.command first.')
     a,b=st.columns([1,2])
     if a.button('← Change video'):go('source')

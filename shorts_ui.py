@@ -22,7 +22,7 @@ def choose_edit(folder, analysis, candidate, transcript, settings):
             try:
                 result = run_job('shorts-'+identity, lambda update:worker('shorts_edit', dict(candidate=source,
                     sentences=transcript['sentences'], words=transcript['words'], maximum=settings['maximum'],
-                    quality=settings.get('quality','Balanced'), cache_dir=str(folder/'topic-reviews-v37/shorts')),
+                    quality=settings.get('quality','Balanced'), editor_model=settings.get('editor_model'), cache_dir=str(folder/'topic-reviews-v37/shorts')),
                     progress=update), 60)
                 saved[identity] = dict(edits, Balanced=result)
                 write(saved_path, saved)
@@ -48,7 +48,7 @@ def choose_edit(folder, analysis, candidate, transcript, settings):
                 baseline = {k:primary['edit_plan'][k] for k in ('ranges','recommended_duration','final_transcript')}
                 result = run_job('variant-'+name+identity, lambda update:worker('shorts_edit', dict(candidate=source,
                     sentences=transcript['sentences'], words=transcript['words'], maximum=settings['maximum'],
-                    quality=settings.get('quality','Balanced'), cache_dir=str(folder/'topic-reviews-v37/shorts'),
+                    quality=settings.get('quality','Balanced'), editor_model=settings.get('editor_model'), cache_dir=str(folder/'topic-reviews-v37/shorts'),
                     variant=name, baseline=baseline), progress=update), 60)
                 saved[identity] = dict(edits, **{name:result},_selected=name)
                 write(saved_path, saved)
@@ -68,6 +68,7 @@ def decisions(candidate):
         st.caption('Local model checks are estimates. Listen to the joins and compare the source before posting.')
         st.write(plan['standalone_context_check']['reason'])
         st.caption(plan.get('decision_basis','Local editor proposal'))
+        if plan.get('editor_model'):st.caption('AI editor: '+plan['editor_model'].split(':',1)[0])
         st.dataframe([dict(role=r['role'], start=round(r['start'],3), end=round(r['end'],3), reason=r['reason']) for r in plan['ranges']], hide_index=True)
         if plan['removed_ranges']:
             st.write('Removed speech')
