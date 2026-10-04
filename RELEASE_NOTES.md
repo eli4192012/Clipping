@@ -1,3 +1,12 @@
+# v5.25 · Repair rejected posting text
+
+- Gives the posting writer the rejected draft and source-check reason during its one bounded retry. It repairs unsupported wording against the final clip instead of starting again from an error alone.
+- Directs the writer and checker to preserve the terms linking conditions to outcomes, including the golden-signature London Eye prize. Corrected text still needs to pass the existing source, title, hashtag, closing and fresh-description checks.
+- Matches question hooks to the clip: rewards/reveals can use What, Why requires a stated reason, and How-to requires an actual method. Event descriptions do not have to use commentary phrasing.
+- Removes duplicate title alternatives before checking the remaining hooks; repeated ideas no longer cancel an otherwise valid posting package.
+- Shows a concise explanation and retry/manual-edit guidance when generation fails. Existing manual copy, checked caches, source media, transcripts and exports remain saved. Loaded older posting controls refresh without restarting the app.
+- Uses the installed local model and existing transcript. No new downloads, transcription, video rendering, cloud inference or automatic publication. New writer cache keys avoid reusing older drafts. See [validation](V525_VALIDATION.md).
+
 # v5.24 · AI opening text
 
 - Adds **Look → Improve the opening with AI**. Generate a short first-screen hook from the final kept transcript and its first three seconds, then explicitly apply it to preview a new export.

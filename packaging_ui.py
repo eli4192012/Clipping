@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from project_store import read, write
 
-POST_FORM_API=3
+POST_FORM_API=4
 OPENING_HOOK_API=1
 
 
@@ -59,10 +59,10 @@ def look_form(style,package,words,mode,identity,ranged=False):
 def post_form(folder,package,settings=None,active=False):
     import streamlit as st
     import social_copy
-    if social_copy.VERSION!='social-copy-3':
+    if social_copy.VERSION!='social-copy-4':
         import importlib
         importlib.reload(social_copy)
-    from social_copy import VERSION,inline_title,inline_caption,get_copy,identity,refresh_fields
+    from social_copy import VERSION,inline_title,inline_caption,get_copy,identity,refresh_fields,posting_error
     from local_editor import LABELS,installed
     saved_path=Path(folder)/'platform-posts-v517.json'
     saved=read(saved_path,{})
@@ -111,7 +111,7 @@ def post_form(folder,package,settings=None,active=False):
                         st.session_state['youtube-title-'+key]=updated['title']
                         st.session_state['youtube-description-'+key]=updated['description']
                         st.rerun()
-                    except Exception as error:st.error('Could not generate posting text: '+str(error))
+                    except Exception as error:st.error('Could not generate posting text: '+posting_error(error))
                 if not post.get('title') or not post.get('description'):st.info('Posting text is ready after AI generation, or you can write it below. The transcript is not used as the description.')
                 if post.get('ai_model') and post.get('copy_origin')!='manual':st.caption('AI hook selected · '+post['ai_model'].split(':',1)[0]+'. Review the wording before posting.')
                 if len(post.get('title_options',[]))>1:

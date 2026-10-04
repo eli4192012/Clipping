@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
-from social_copy import VERSION,normalize,title_options,inline_title,inline_caption,generate_local,get_copy,identity,refresh_fields,copied_description,closing_qualification
+from social_copy import VERSION,normalize,title_options,inline_title,inline_caption,generate_local,get_copy,identity,refresh_fields,copied_description,closing_qualification,posting_error
 
 TEXT='The best cut is no cut. You keep your speed and momentum.'
 
@@ -61,6 +61,8 @@ class AISocialCopyTests(unittest.TestCase):
         self.assertIn('Preserve negation and uncertainty',generate.call_args_list[0].args[0])
         self.assertIn(TEXT,generate.call_args_list[0].args[0])
         self.assertIn('no other source context',generate.call_args_list[1].args[0])
+        self.assertIn('use What for a reveal, reward or event',generate.call_args_list[0].args[0])
+        self.assertIn('reject it unless the speech gives that reason',generate.call_args_list[1].args[0])
         self.assertTrue(result['source_check']['faithful'])
 
     def test_cache_reuses_model_and_final_clip_and_never_retranscribes(self):
@@ -99,6 +101,49 @@ class AISocialCopyTests(unittest.TestCase):
             self.assertTrue(generate_local(TEXT,None)['source_check']['faithful'])
         self.assertEqual(generate.call_count,3)
         self.assertIn('previous response was rejected',generate.call_args_list[1].args[0])
+
+    def test_repair_receives_rejected_draft_and_checks_correct_source_condition(self):
+        # Both terms are present: mere word overlap cannot establish the prize condition.
+        text='Whoever gets this golden signature is going on the London Eye with the edge. If you have a bold signature on your football, make your way over here. Thanks for coming out.'
+        bad=dict(title_options=['Why is a bold signature special?','The signature with a surprise','A football signature with a twist'],hashtags=['#Signature','#LondonEye'],description='A bold football signature wins a trip to the London Eye.',closing_summary='',evidence_quotes=['gets this golden signature'])
+        rejection=dict(faithful=False,ending_preserved=True,approved_titles=[],best_title='',reason="Source says 'golden signature', not 'bold signature'.",unsupported_claims=[bad['description']])
+        repair=dict(bad,title_options=['Why is this golden signature special?','A golden signature comes with a London Eye trip','The signature with a London Eye surprise'],description='A golden signature comes with an unexpected London Eye outing.')
+        checked=dict(faithful=True,ending_preserved=True,approved_titles=repair['title_options'],best_title=repair['title_options'][0],unsupported_claims=[],reason='Golden signature is linked to the trip.')
+        with patch('shorts_editor.generate_json',side_effect=[bad,rejection,repair,checked]) as generate:
+            result=generate_local(text,None)
+        self.assertEqual(generate.call_count,4)
+        repair_prompt=generate.call_args_list[2].args[0]
+        self.assertIn(json.dumps(bad),repair_prompt)
+        self.assertIn(json.dumps(rejection),repair_prompt)
+        self.assertIn('linking that condition to that outcome',repair_prompt)
+        self.assertIn(text,generate.call_args_list[3].args[0])
+        self.assertEqual(result['description'],repair['description'])
+        self.assertNotIn('bold',result['title']+' '+result['description'])
+        self.assertTrue(result['source_check']['faithful'])
+
+    def test_repeated_source_mismatch_is_still_rejected_after_bounded_repair(self):
+        rejection=dict(faithful=False,reason='Wrong condition for this outcome.',unsupported_claims=['bad claim'])
+        with patch('shorts_editor.generate_json',side_effect=[raw_copy(),rejection]*2) as generate:
+            with self.assertRaisesRegex(ValueError,'source check'):generate_local(TEXT,None)
+        self.assertEqual(generate.call_count,4)
+
+    def test_repeated_title_alternatives_do_not_discard_checked_copy(self):
+        raw=dict(raw_copy(),title_options=[raw_copy()['title_options'][0]]*3)
+        verdict=checked_verdict(indices=[0])
+        with patch('shorts_editor.generate_json',side_effect=[raw,verdict]) as generate:
+            result=generate_local(TEXT,None)
+        self.assertEqual(generate.call_count,2)
+        self.assertEqual(result['title_options'],[result['title']])
+        self.assertIn(json.dumps([raw['title_options'][0]]),generate.call_args_list[1].args[0])
+
+    def test_posting_error_extracts_source_reason_without_worker_traceback(self):
+        report=dict(reason="Source says 'golden signature', not 'bold signature'.",unsupported_claims=['Incorrect prize.'])
+        failure=RuntimeError('Local worker failed: Traceback (most recent call last):\n  File "/private/app.py", line 100\nValueError: The AI posting text did not pass its source check. '+json.dumps(report))
+        message=posting_error(failure)
+        self.assertIn(report['reason'],message)
+        self.assertIn('Generate fresh text',message)
+        for detail in ('Traceback','/private/','ValueError','unsupported_claims'):self.assertNotIn(detail,message)
+        self.assertIn('could not finish',posting_error(RuntimeError('Local worker failed: terminated')))
 
     def test_transcript_dump_and_stitched_quotes_are_rejected_but_fresh_teaser_is_accepted(self):
         text='An ugly win teaches you how to finish a close game. The defense did a phenomenal job after the turnovers. You cannot keep losing the turnover battle every week.'

@@ -73,6 +73,24 @@ class AISocialCopyUITests(unittest.TestCase):
         self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My manual title #Speed')
         self.assertEqual(self.export.call_count,1)
 
+    def test_source_check_failure_shows_reason_and_keeps_saved_manual_text(self):
+        app=self.app.run()
+        next(t for t in app.text_input if t.label=='YouTube title').set_value('My verified title #Speed')
+        next(t for t in app.text_area if t.label=='YouTube description').set_value('My verified summary.')
+        next(b for b in app.button if b.label=='Save YouTube Shorts text').click().run()
+        saved=(self.folder/'platform-posts-v517.json').read_bytes()
+        report=json.dumps(dict(reason="Source says 'golden signature', not 'bold signature'.",unsupported_claims=['wrong prize']))
+        failure=RuntimeError('Local worker failed: Traceback (most recent call last):\n  File "/private/quality_worker.py", line 100\nValueError: The AI posting text did not pass its source check. '+report)
+        with patch('upgrades.worker',side_effect=failure):
+            next(b for b in app.button if b.label=='Generate fresh text').click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('golden signature' in e.value and 'Generate fresh text' in e.value for e in app.error))
+        self.assertFalse(any('Traceback' in e.value or '/private/' in e.value for e in app.error))
+        self.assertEqual((self.folder/'platform-posts-v517.json').read_bytes(),saved)
+        self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My verified title #Speed')
+        self.assertEqual(next(t for t in app.text_area if t.label=='YouTube description').value,'My verified summary.')
+        self.assertEqual(self.export.call_count,1)
+
     def test_editor_refreshes_old_loaded_post_form_without_losing_saved_copy(self):
         import importlib
         import packaging_ui
@@ -86,7 +104,7 @@ class AISocialCopyUITests(unittest.TestCase):
             app.run()
             self.assertFalse(app.exception)
             reload.assert_called_once_with(packaging_ui)
-            self.assertEqual(packaging_ui.POST_FORM_API,3)
+            self.assertEqual(packaging_ui.POST_FORM_API,4)
             self.assertTrue(any(b.label=='Generate title & description with AI' for b in app.button))
             self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My saved title #Speed')
         self.assertEqual((self.folder/'platform-posts-v517.json').read_bytes(),saved)
