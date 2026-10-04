@@ -10,6 +10,10 @@ from interview import interview_content
 from vision_sports import VISION,football_hint
 from modes import PROFILES
 from youtube_import import lookup,download,normalize_url
+import jobs,audience_quality
+if getattr(jobs,'CURATION_API',0)<1 or getattr(audience_quality,'CURATION_API',0)<1:
+    import importlib
+    importlib.reload(audience_quality);importlib.reload(jobs)
 from jobs import analyze,analysis_path,estimate_seconds
 from ui_jobs import run_job,clock
 from review_ui import review_form,review_history
@@ -252,6 +256,13 @@ if page=='settings':
         portrait=st.toggle('Vertical video · 9:16',value=previous.get('portrait',False))
         shorts_editor=st.toggle('Edit speech into tighter Shorts',value=previous.get('shorts_editor',True),disabled=mode=='Sports') and mode!='Sports'
         if shorts_editor:st.caption('Finds a strong opening, removes unnecessary phrases, and checks the ending locally. Uses the larger local editor in both processing modes. Reuses your transcript; other versions are created on request.')
+        from sound_analysis import installed as sound_installed
+        multimodal=st.toggle('Use speech, visuals & sound to choose clips',value=previous.get('multimodal_curation',sound_installed()))
+        if multimodal:
+            st.caption('Adds source-timed sound and sampled-frame evidence to genre-specific selection. Keeps all completeness checks. The heavier visual review covers a limited number of moments; this adds processing time.')
+            curation_windows=st.slider('Moments to review visually',1,6,int(previous.get('curation_windows',3)))
+            if not sound_installed():st.info('Sound classification needs one-time setup: .venv/bin/python setup_sound.py. Other evidence can still be reviewed.')
+        else:curation_windows=int(previous.get('curation_windows',3))
         st.caption('Portrait interviews default to automatic framing: a tighter person crop when suitable, otherwise the full picture over blurred video. Adjust the layout when reviewing.')
         with st.expander('Advanced settings · duration, coverage & models'):
             editor_default=previous.get('editor_model') if previous.get('editor_model') in CHOICES else preferred_editor()
@@ -275,7 +286,7 @@ if page=='settings':
     sentences=json.loads(transcript_path.read_text()).get('sentences',[]) if transcript_path.exists() else []
     if mode!='Sports' and football_hint(project['title'],sentences) and not interview_content(project['title'],sentences):st.warning('For on-field highlights, Sports mode reviews action. Interview mode follows the conversation.')
     if mode=='Sports' and interview_content(project['title'],sentences):st.info('For a sports interview, Interview mode is usually the better fit.')
-    settings=dict(resource_defaults=1,shorts_editor=shorts_editor,categories=categories,category_selection=selected,auto_mode=automatic,video_type=detection,coverage=coverage,mode=mode,minimum=minimum,maximum=maximum,min_clips=min_clips,portrait=portrait,semantic=semantic,vision=vision,windows=windows,quality=quality,scenes=scenes,speakers=speakers,alignment=alignment,sports_discovery_version=3)
+    settings=dict(resource_defaults=1,shorts_editor=shorts_editor,categories=categories,category_selection=selected,auto_mode=automatic,video_type=detection,coverage=coverage,mode=mode,minimum=minimum,maximum=maximum,min_clips=min_clips,portrait=portrait,semantic=semantic,vision=vision,windows=windows,quality=quality,scenes=scenes,speakers=speakers,alignment=alignment,sports_discovery_version=3,multimodal_curation=multimodal,curation_windows=curation_windows)
     if mode!='Sports':settings['editor_model']=editor_model
     from project_store import write,read
     if read(folder/'ui-settings.json',{})!=settings:write(folder/'ui-settings.json',settings)
@@ -323,6 +334,13 @@ if page=='complete':
     if settings['mode']=='Sports':
         from sports_report_ui import show_report
         show_report(path)
+    curation_report=json.loads(path.with_suffix('.diagnostics.json').read_text()).get('multimodal_curation') if path.with_suffix('.diagnostics.json').exists() else None
+    if curation_report:
+        with st.expander('Speech, visuals & sound review summary'):
+            st.write(f"Sound and genre evidence for {curation_report['total_moments']} moments; learned visual review for up to {curation_report['visual_moments']}.")
+            st.caption(f"Measured review time: {curation_report['seconds']:.1f}s. Reused reports retain their original time; it is not the current cache-read duration.")
+            for failure in curation_report['failures']:st.warning(failure)
+            st.caption('These are editing cues. Emotion analysis and analytics training are not used.')
     if settings['mode']!='Sports' and path.with_suffix('.diagnostics.json').exists():
         report=json.loads(path.with_suffix('.diagnostics.json').read_text())
         with st.expander('Why these clips?'):
@@ -373,6 +391,9 @@ if page=='results':
             with right:usage_checkbox(folder,path,c,'list')
             left.subheader(c['title'])
             if c.get('audience_quality'):left.caption(c['audience_quality']['reason'])
+            with left:
+                from multimodal_ui import show as show_curation
+                show_curation(c)
             left.write(c['text'][:150]+('…' if len(c['text'])>150 else ''))
             with left.expander('Suggested edit assessment'):
                 from final_package import editorial_assessment
@@ -599,6 +620,9 @@ if page=='editor':
     with edit_tab:review_form(folder,str(path),review_details)
     with advanced_tab:
         advanced(package,final_candidate,final_words,final_ranges)
+        from multimodal_ui import review_form as curation_form
+        curation_candidate=dict(final_candidate,text=package['final_transcript'],edit_plan=dict(ranges=final_ranges))
+        curation_form(project,transcript,curation_candidate,settings)
         from audience_quality import show_report as show_audience_report
         show_audience_report(final_candidate)
         review_history(folder)

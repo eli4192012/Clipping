@@ -38,7 +38,7 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.27**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.28**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
 
 Saved videos can be reopened from the start screen. Settings and previous results are kept locally. Initial processing estimates use video length and selected review options; later estimates use this video's previous measured processing time. Percentages represent processing milestones, not a promise of constant speed.
 
@@ -51,6 +51,24 @@ Qwen3.5 is downloaded once to `models/qwen3.5-4b` (about 3.06 GB) from a pinned 
 Changing the AI editor creates separate analysis, topic and edit-decision caches. Existing transcripts are reused, old results stay saved, and repeated work with the same model reopens cached decisions. Inference runs one model process at a time with the existing 3 GiB MLX limit, small prompt-prefill batches and a bounded context; oversized source neighborhoods fail for review instead of silently losing text. No transcript or media is sent to a model service. Streamlit telemetry is disabled and the server binds only to localhost. See [v5.19 validation](V519_VALIDATION.md) for comparison results and limitations.
 
 If models are missing, double-click **Download Models.command** while connected to the internet. Allow several GB of disk space for dependencies, models, source videos, and exports. English editorial review is recommended. Whisper can detect other languages, but this app's selection rules are English-oriented.
+
+## Choose moments using speech, visuals and sound
+
+v5.28 adds a local curation pass after speech editing and before final clip selection. In project settings, enable **Use speech, visuals & sound to choose clips**, choose how many moments to review visually (1–6, default 3), then **Find my clips**. When sound setup is present, the option defaults on for settings without a saved choice. Existing saved analyses reopen as before; **Adjust settings** starts a separately cached analysis using the new option.
+
+The pass reuses your transcript and grounded speech review. Google's local **YAMNet** classifies source-timed sound windows, including speech, music and possible laughter/applause/cheering. The installed **Qwen3-VL 4B** examines three frames across each selected moment's retained source ranges; a cheap scan records motion and camera changes. Interview, Podcast, Sports, Music and Gaming presets weight supporting cues differently. These are transparent editing rules, not a newly trained genre or emotion model. Supporting cues make only small priority adjustments; rejected/incomplete clips and the one-question interview limit stay authoritative.
+
+The first setup needs internet access; subsequent inference runs offline. Install sound separately so TensorFlow does not alter the app's MLX dependencies:
+
+```sh
+.venv/bin/python setup_sound.py
+```
+
+This uses pinned dependencies in `.venv-audio`, unmodified Apache 2.0 YAMNet source, and checksum-verified official model weights (about 15.3 MB). Dependencies need additional disk space. Sound is already installed on the development Mac. The normal `download_models.py` setup provides the 4B vision model; no additional vision weights were downloaded for this release. Missing models and failed observations stay visibly unavailable.
+
+Open **Speech, visuals & sound evidence** in the collection to inspect reviewed moments. For an older clip, use **Advanced → Review this moment with speech, visuals & sound**. That button reviews the current final cut without applying edits, rendering a new export or changing posting text. Evidence includes source timestamps, actual frames, uncertain observations, available signal weights and downloadable JSON. Viewing evidence runs no model. Cached sound, motion, frame observations and complete reports are reused; different source files, cuts, transcripts, genre or model configuration get separate reports. Stale cut/source evidence is hidden until reviewed again.
+
+This first version reviews only a limited set of existing candidate moments visually. It does not use emotion inference, learn from analytics, certify a completed sports play or predict views. The small saved-video trials show that cues can change priority, but do not establish better clip quality or audience retention. The smaller 2B vision model produced unreliable labels during testing; this pass uses 4B and marks detected contradictions uncertain. Inference still makes mistakes, so inspect frames and listen before posting. See [v5.28 validation](V528_VALIDATION.md) for measured results and preservation checks.
 
 ## Combine clips into a longer video
 

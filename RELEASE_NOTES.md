@@ -1,3 +1,12 @@
+# v5.28 · Local speech, visual and sound curation
+
+- Adds **Use speech, visuals & sound to choose clips** in project settings. Reuses speech editing, then combines local sound classification and sampled-frame observations before final moment selection. Choose 1–6 moments for heavier visual review, default 3.
+- Uses Google's local YAMNet for speech/music/reaction sounds, the installed Qwen3-VL 4B for three retained-source frames per selected moment, and a cached motion/camera-change scan. Interview, Podcast, Sports, Music and Gaming presets apply different supporting weights. Emotion inference and analytics training remain deferred.
+- Makes only small priority adjustments. Existing source checks, complete endings and the one-question interview limit take precedence. Missing models, failed responses and detected visual contradictions remain unavailable or uncertain; motion cannot approve a completed sports play.
+- Shows **Speech, visuals & sound evidence**, with actual source frames/timestamps, sound windows, weights, failures and downloadable JSON. **Advanced → Review this moment with speech, visuals & sound** reviews an existing final cut on demand without changing its edits, captions, posting text or export.
+- Installs the small sound model in a separate pinned TensorFlow environment using `setup_sound.py`; sound setup is completed on this Mac. Inference stays local and serial, reuses transcripts, and caches source and cut evidence independently. The main MLX dependencies and analysis-cache VERSION stay unchanged.
+- **330 tests passed**, plus real trials across four moments in three saved videos, cache reopening without workers, and live app evidence checks. The first small-model attempt was unreliable; final curation uses 4B. The observed priority change does not establish better clips, audience gains or parity with a commercial service. See [validation](V528_VALIDATION.md).
+
 # v5.27 · Before-and-after comparisons
 
 - Adds **Before & after** in the sidebar and **Edit → Compare before and after** for a saved moment. Play real pairs, inspect opening/posting text and final thoughts, download reports and save your own preference and notes.

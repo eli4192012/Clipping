@@ -28,6 +28,9 @@ def run(task,p,progress=lambda p,label:None):
         prompt='Write posting copy for this transcript DATA. Return JSON title (specific short headline), description (1–2 sentences). Title must be at most 100 characters including spaces. Do not generate hashtags. Preserve uncertainty, no invented results or unsupported hype. Only describe what the clip says. Transcript: '+json.dumps(p['text'])
         formatted=tokenizer.apply_chat_template([dict(role='user',content=prompt)],tokenize=False,add_generation_prompt=True,enable_thinking=False)
         return parse_json(generate(model,tokenizer,prompt=formatted,max_tokens=300,sampler=sampler,verbose=False))
+    if task=='curation_visual':
+        from curation_vision import generate_local
+        return generate_local(p['frames'],p['model_path'],progress)
     if task=='opening_hook':
         from local_editor import load_bundle
         from opening_hooks import generate_local

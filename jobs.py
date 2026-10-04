@@ -6,6 +6,7 @@ from engine import transcribe,review_candidates
 from modes import VERSION,speech_candidates,sports_candidates,scan_visuals,refine_sports_boundaries,select_highlights
 from vision_sports import visual_candidates
 from upgrades import signature,transcript_file,worker,scene_times,apply_scene_context,VISION4
+CURATION_API=1
 
 
 def analysis_path(project, settings):
@@ -16,7 +17,8 @@ def analysis_path(project, settings):
     variant='vision'+str(settings['windows']) if mode=='Sports' and settings['vision'] else 'ai' if settings['semantic'] else 'basic'
     editorial='-shorts1' if settings.get('shorts_editor') and mode!='Sports' else ''
     from local_editor import cache_tag as editor_tag
-    return Path(project['folder'])/f"clips-v{VERSION}-{mode}-{settings['minimum']}-{settings['maximum']}-all-{variant}-c{settings.get('coverage',1.0 if mode!='Sports' else .35)}-v514{editorial}-{signature(settings)}-{source_tag}{cache_tag(settings)}{editor_tag(settings)}.json"
+    from multimodal_curation import cache_tag as curation_tag
+    return Path(project['folder'])/f"clips-v{VERSION}-{mode}-{settings['minimum']}-{settings['maximum']}-all-{variant}-c{settings.get('coverage',1.0 if mode!='Sports' else .35)}-v514{editorial}-{signature(settings)}-{source_tag}{cache_tag(settings)}{editor_tag(settings)}{curation_tag(settings)}.json"
 
 
 def estimate_seconds(project, settings):
@@ -24,7 +26,8 @@ def estimate_seconds(project, settings):
     if analysis_path(project,settings).exists():return 1
     history=folder/'ui-timing.json'
     from local_editor import cache_tag as editor_tag
-    key=settings['mode']+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and settings['mode']!='Sports' else '')+editor_tag(settings)
+    from multimodal_curation import cache_tag as curation_tag
+    key=settings['mode']+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and settings['mode']!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
     if history.exists():
         measured=json.loads(history.read_text()).get(key)
         if measured: return measured
@@ -46,7 +49,8 @@ def estimate_seconds(project, settings):
             count=windows*6
             proposal_seconds=windows*(45 if settings.get('shorts_editor') or settings.get('quality')=='Higher quality' else 20)
         review=proposal_seconds+count*(45 if settings.get('shorts_editor') else (25 if settings.get('quality')=='Higher quality' else 12))
-    return max(15,transcription+review)+(120 if settings.get('alignment') or settings.get('speakers') else 0)
+    extra=project['duration']*.05+settings.get('curation_windows',3)*45 if settings.get('multimodal_curation') else 0
+    return max(15,transcription+review)+(120 if settings.get('alignment') or settings.get('speakers') else 0)+extra
 
 
 def get_transcript(project,settings,progress):
@@ -96,7 +100,7 @@ def analyze(project,settings,progress):
     from project_store import read,write
     import hashlib
     selection_inputs=dict(settings)
-    for key in ('coverage','min_clips','portrait','auto_mode','video_type','category_selection'):selection_inputs.pop(key,None)
+    for key in ('coverage','min_clips','portrait','auto_mode','video_type','category_selection','multimodal_curation','curation_windows'):selection_inputs.pop(key,None)
     cache_key=hashlib.sha256(json.dumps([str(source.resolve()),source.stat().st_size,source.stat().st_mtime_ns,transcript,selection_inputs,'reviewed-v514'],sort_keys=True).encode()).hexdigest()
     reviewed_path=folder/('reviewed-'+cache_key+'.json')
     prior=read(reviewed_path,None)
@@ -132,7 +136,7 @@ def analyze(project,settings,progress):
             progress(.93,'Finding scene boundaries')
             candidates=apply_scene_context(candidates,scene_times(source,folder/'scene-cuts-v2.json'),total)
         if candidates and not any(c.get('shorts_editor_error') for c in candidates):write(reviewed_path,dict(candidates=candidates,diagnostics=diagnostics))
-    progress(.95,'Checking openings, useful content and payoff')
+    progress(.94,'Checking openings, useful content and payoff')
     if mode=='Interview':
         from interview_integrity import verify,topic_title
         for c in candidates:
@@ -144,7 +148,11 @@ def analyze(project,settings,progress):
         candidates=[c if c.get('edit_plan') or settings.get('shorts_editor') else protect_endings([c],transcript['words'],total)[0] for c in candidates]
     from audience_quality import annotate
     candidates=annotate(candidates,mode)
-    progress(.97,'Ranking distinct complete moments and saving results')
+    if settings.get('multimodal_curation') and candidates:
+        from multimodal_curation import curate
+        candidates,curation=curate(project,transcript,candidates,settings,lambda p,label:progress(.945+.04*p,label))
+        diagnostics['multimodal_curation']={k:v for k,v in curation.items() if k!='candidates'}
+    progress(.99,'Ranking distinct complete moments and saving results')
     exclusions=[]
     before_count=len(candidates)
     all_drafts=list(candidates)
@@ -164,7 +172,8 @@ def analyze(project,settings,progress):
         path.with_suffix('.diagnostics.json').write_text(json.dumps(diagnostics,indent=2))
     history=folder/'ui-timing.json';data=json.loads(history.read_text()) if history.exists() else {}
     from local_editor import cache_tag as editor_tag
-    key=mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)
+    from multimodal_curation import cache_tag as curation_tag
+    key=mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
     if not isinstance(prior,dict):
         data[key]=time.monotonic()-begun;history.write_text(json.dumps(data))
     from project_store import save_run
