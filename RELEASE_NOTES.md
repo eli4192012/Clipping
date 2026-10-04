@@ -1,3 +1,11 @@
+# v5.27 · Before-and-after comparisons
+
+- Adds **Before & after** in the sidebar and **Edit → Compare before and after** for a saved moment. Play real pairs, inspect opening/posting text and final thoughts, download reports and save your own preference and notes.
+- Uses the same source, transcript, fixed discovery cut and rendering profile for both sides. Reviews a copy in opening → ending → final-cut opening check → posting order. Existing project edits, publishing drafts, transcripts and exports are kept.
+- Reuses local transcription, model decisions and renders. Stage times distinguish fresh work from cache reads. Failed steps are shown; no suggestion is automatically applied or published. Earlier runs and failures stay available.
+- Compares four saved moments and exposes mixed results, including local self-checks accepting inaccurate headline wording. Shorter duration or a model's approval is not counted as proof of better quality. See [validation](V527_VALIDATION.md).
+- Fixes a false two-question rejection when one unfinished comma-ended question continues across a short pause. Completed questions, voice changes and explicit multiple questions remain separate. The analysis-cache version is unchanged.
+
 # v5.26 · AI ending review
 
 - Adds **Edit → Improve the ending with AI**. Identify the main point, choose a complete source-sentence ending and check the proposed payoff, removed speech, qualifications and opening promise locally. The reviewer can keep an already suitable ending.

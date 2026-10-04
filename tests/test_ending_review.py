@@ -128,5 +128,34 @@ class EndingReviewTests(unittest.TestCase):
                 self.assertNotEqual(other['key'],data['key']);self.assertEqual(other['basis'],data['basis'])
                 self.assertEqual(applied(saved,other)['ranges'],saved['ranges'])
 
+    def test_short_pause_inside_unfinished_question_does_not_block_a_complete_answer(self):
+        with tempfile.TemporaryDirectory() as root:
+            t=speech(['What preparation matters, whether it is how you practice,',
+                      'how you study or how you recover?', 'I keep a steady routine before every game.',
+                      'Thanks for coming to the show.'])
+            data=context(root,t,[dict(start=0,end=15.9)],16,dict(mode='Interview'))
+            endpoint=next(e['id'] for e in data['offered_endpoints'] if 'steady routine' in e['last_sentence'])
+            self.assertNotIn('Thanks',compile_choice(data,endpoint)['final_transcript'])
+
+    def test_finished_questions_or_changed_voices_never_merge_into_one_question(self):
+        from interview_integrity import speech_question_count
+        for first,second in [('What is your preparation?','how do you recover?'),
+                             ('What is your preparation,','How do you recover?')]:
+            groups=[dict(start=0,end=3,text=first),dict(start=3.5,end=6,text=second)]
+            self.assertEqual(speech_question_count(groups),2)
+        groups=[dict(start=0,end=3,text='What is your preparation,',speaker='A'),
+                dict(start=3.5,end=6,text='how do you recover?',speaker='B')]
+        self.assertEqual(speech_question_count(groups),2)
+        with tempfile.TemporaryDirectory() as root:
+            t=speech(['What is your preparation,','how do you recover?',
+                      'I keep a steady routine before every game.'])
+            for word in t['words']:word['speaker']='A' if word['start']<4 else 'B'
+            with self.assertRaisesRegex(ValueError,'No complete, safe'):
+                context(root,t,[dict(start=0,end=11.9)],12,dict(mode='Interview'))
+            t=speech(['What is your preparation,','This intervening speech was removed.',
+                      'how do you recover?','I keep a steady routine before every game.'])
+            with self.assertRaisesRegex(ValueError,'No complete, safe'):
+                context(root,t,[dict(start=0,end=3.9),dict(start=8,end=15.9)],16,dict(mode='Interview'))
+
 
 if __name__=='__main__':unittest.main()

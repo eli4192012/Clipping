@@ -116,5 +116,19 @@ class EndingUITests(test_packaging_ui.PackagingUITests):
             self.assertEqual([c.args[0] for c in reload.call_args_list],[ending_review,ending_ui])
         self.assertEqual(self.analysis.read_bytes(),saved);self.assertEqual(self.export.call_count,1)
 
+    def test_comparison_handoff_uses_the_prior_timeline_without_replacing_applied_end(self):
+        app=self.app.run();self.generate()
+        next(b for b in app.button if b.label=='Apply this ending').click().run()
+        saved=self.analysis.with_suffix('.endings.json').read_bytes()
+        with patch('before_after_ui.show') as show:
+            next(b for b in app.button if b.label=='Compare before and after').click().run()
+        self.assertFalse(app.exception);show.assert_called_once()
+        request=app.session_state['before_after_pending']
+        self.assertEqual(request['ranges'],self.data['ranges'])
+        self.assertEqual(request['editor_model'],'qwen3-4b')
+        self.assertEqual(request['transcript'],str(self.folder/'transcript.json'))
+        self.assertEqual(self.analysis.with_suffix('.endings.json').read_bytes(),saved)
+        self.assertEqual(self.export.call_count,2)
+
 
 if __name__=='__main__':unittest.main()

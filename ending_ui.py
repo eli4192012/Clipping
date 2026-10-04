@@ -3,7 +3,7 @@ import streamlit as st
 from ending_review import cached, get_ending, with_editor
 from local_editor import installed, LABELS
 
-ENDING_FORM_API = 2
+ENDING_FORM_API = 3
 
 
 def ending_form(folder, data, saved, identity, unavailable_reason=''):

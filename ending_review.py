@@ -7,7 +7,7 @@ from pathlib import Path
 from edit_timeline import validate_ranges, remap_words, timeline_duration
 from project_store import read, write
 
-VERSION = 'ending-review-2'
+VERSION = 'ending-review-3'
 CHECKS = ('faithful', 'standalone', 'complete_payoff', 'qualifications_preserved', 'opening_preserved', 'ending_relevant')
 
 
@@ -48,14 +48,14 @@ def _groups(words):
 
 
 def _guard(original, final, removed, mode):
-    from interview_integrity import question
+    from interview_integrity import question,speech_question_count
     if not final or question(_groups(final)[-1]['text']):
         raise ValueError('The ending cannot be an unanswered question.')
     last = _text(final).rstrip().rstrip('"”\'')
     if re.search(r'[,;:\-—]$|\b(?:and|because|to|of|the|a|but|if|unless)\s*$', last, re.I):
         raise ValueError('The ending stops on an unfinished clause.')
     if mode == 'Interview':
-        count = sum(max(1, s['text'].count('?')) for s in _groups(final) if question(s['text']))
+        count = speech_question_count(_groups(final),final)
         if count > 1: raise ValueError('An interview clip must not contain two questions.')
     if removed:
         first = _groups(removed)[0]['text']

@@ -15,6 +15,10 @@ from ui_jobs import run_job,clock
 from review_ui import review_form,review_history
 from upgrades import TURBO,EDITOR4,VISION4,SPEAKERS,transcript_file
 from local_editor import QWEN35,CHOICES,LABELS,installed,preferred_editor
+import interview_integrity
+if getattr(interview_integrity,'QUESTION_COUNT_API',0)<2:
+    import importlib
+    importlib.reload(interview_integrity)
 
 st.set_page_config(page_title='Clipping · Your local studio',page_icon=str(ROOT/'assets/mark.svg'),layout='wide',initial_sidebar_state='expanded')
 version=json.loads((ROOT/'version.json').read_text())
@@ -41,7 +45,7 @@ st.session_state.setdefault('page','library')
 page=st.session_state.page
 stages=['source','settings','processing','complete','results','editor']
 active=0 if page=='source' else 1 if page=='settings' else 2 if page=='processing' else 3
-if page not in ('library','source','accounts','social_history','combine','examples'):
+if page not in ('library','source','accounts','social_history','combine','examples','before_after'):
     st.markdown('<nav class="steps" aria-label="Project progress">'+ '<span class="step-connector" aria-hidden="true">—</span>'.join(f'<span class="step {"active" if i==active else "done" if i<active else ""}" '+('aria-current="step"' if i==active else '')+f'><span class="step-number">{"✓" if i<active else f"{i+1:02}"}</span>{name}</span>' for i,name in enumerate(['Add video','Make it yours','Find moments','Review clips']))+'</nav>',unsafe_allow_html=True)
 
 
@@ -67,6 +71,7 @@ with st.sidebar:
     if page!='processing' and st.button('＋ New project',icon=':material/add_circle:',use_container_width=True,type='primary' if page=='source' else 'secondary'):go('source')
     if page!='processing' and st.button('Combine clips',icon=':material/playlist_add:',use_container_width=True,type='primary' if page=='combine' else 'secondary'):go('combine')
     if page!='processing' and st.button('Example library',icon=':material/bookmarks:',use_container_width=True,type='primary' if page=='examples' else 'secondary'):go('examples')
+    if page!='processing' and st.button('Before & after',icon=':material/compare:',use_container_width=True,type='primary' if page=='before_after' else 'secondary'):go('before_after')
     if page!='processing' and st.button('Accounts',icon=':material/group:',use_container_width=True):go('accounts')
     if page!='processing' and st.button('Publishing history',icon=':material/history:',use_container_width=True):go('social_history')
     st.divider()
@@ -79,6 +84,15 @@ with st.sidebar:
 if page=='examples':
     from example_library_ui import show as show_examples
     show_examples(ROOT)
+    st.stop()
+
+if page=='before_after':
+    import before_after,before_after_ui
+    if getattr(before_after_ui,'BEFORE_AFTER_FORM_API',0)<2:
+        import importlib
+        importlib.reload(before_after);importlib.reload(before_after_ui)
+    from before_after_ui import show as show_before_after
+    show_before_after(ROOT,go)
     st.stop()
 
 if page=='combine':
@@ -394,10 +408,11 @@ if page=='editor':
     heading.title(candidate['title'])
     start,end=edits.get(edit_id,[candidate['start'],candidate['end']])
     active_plan=candidate.get('edit_plan') if edit_id not in edits else None
+    comparison_candidate=dict(candidate,edit_plan=active_plan or {})
     render_ranges=active_plan['ranges'] if active_plan else None
     from project_store import read,write
     import ending_review,ending_ui
-    if getattr(ending_ui,'ENDING_FORM_API',0)<2:
+    if getattr(ending_ui,'ENDING_FORM_API',0)<3:
         import importlib
         importlib.reload(ending_review);importlib.reload(ending_ui)
     from ending_review import context as ending_context,applied as applied_ending
@@ -468,6 +483,21 @@ if page=='editor':
         semantic_emphasis=True,emphasis_style='Bold',packaging_version=1))
     if settings['mode']=='Interview' and not active_plan and style.get('title')==original_title:style=dict(style,title=candidate['title'])
     style=dict(style,layout=normalize_layout(style['layout']))
+    with edit_tab:
+        if st.button('Compare before and after',help='Review a copy of this saved moment. Your selected edit and posting text are kept.'):
+            baseline_ranges=ending_data['ranges'] if selected_ending else comparison_candidate['edit_plan'].get('ranges')
+            if not baseline_ranges:
+                a,b=edits.get(edit_id,[comparison_candidate['start'],comparison_candidate['end']])
+                baseline_ranges=[dict(start=a,end=b)]
+            from final_package import get_package
+            baseline_package=get_package(folder,source,comparison_candidate,export_words,baseline_ranges,settings['mode'])
+            baseline_opening=baseline_package['hook'] if style.get('opening_hook_key') or 'title' not in style else style['title']
+            baseline_posting=read(folder/'platform-posts-v517.json',{}).get(baseline_package['fingerprint'],{}).get('YouTube Shorts') or dict(title=original_title,description='')
+            st.session_state.before_after_pending=dict(root=str(ROOT),project=project,transcript=str(transcript_path),ranges=baseline_ranges,
+                mode=settings['mode'],editor_model='qwen3-4b',opening_text=baseline_opening,caption_words=export_words,
+                layout='Original' if style['layout']==LAYOUTS[0] else LAYOUTS[1],
+                posting=baseline_posting,name=project['title']+' · '+original_title)
+            go('before_after')
     render_start,render_end=start,end
     if style.get('trim_edges') and not render_ranges:
         from polish import silent_edges
