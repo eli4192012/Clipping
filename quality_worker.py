@@ -32,6 +32,10 @@ def run(task,p,progress=lambda p,label:None):
         from local_editor import load_bundle
         from opening_hooks import generate_local
         return generate_local(p['text'],p.get('opening_speech',''),p.get('style_lessons',[]),load_bundle(p,large=True),progress)
+    if task=='ending_review':
+        from local_editor import load_bundle
+        from ending_review import generate_local
+        return generate_local(p['data'],load_bundle(p,large=True),progress)
     if task=='social_copy':
         from local_editor import load_bundle
         from social_copy import generate_local

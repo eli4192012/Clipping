@@ -1,3 +1,11 @@
+# v5.26 · AI ending review
+
+- Adds **Edit → Improve the ending with AI**. Identify the main point, choose a complete source-sentence ending and check the proposed payoff, removed speech, qualifications and opening promise locally. The reviewer can keep an already suitable ending.
+- Offers an editor choice for this review without changing the project's model setting. Reuses existing timed transcription and limited ending observations from the local example library; no new model download or cloud inference is needed.
+- Trims only the tail of the current timeline. Earlier speech and internal source gaps are preserved. Timing guards reject cut-off words, unanswered endings, two questions in an interview and directly dependent closing cautions; a source check cannot override these guards.
+- Shows the ending, exact main-point/payoff quotes, removed speech and duration before explicit **Apply this ending**. Generation is on demand and cached, with one bounded retry. Failed generation leaves saved cuts intact. Sports and silent clips retain manual controls.
+- Stores ending selections separately from discovery, manual boundaries and styles. Applying creates a new export; Restore reuses the earlier export. Existing sources, transcripts, caption corrections, analyses, posting text and exports are retained. No automatic publication or analysis-cache version change. See [validation](V526_VALIDATION.md).
+
 # v5.25 · Repair rejected posting text
 
 - Gives the posting writer the rejected draft and source-check reason during its one bounded retry. It repairs unsupported wording against the final clip instead of starting again from an error alone.

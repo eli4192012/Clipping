@@ -395,10 +395,50 @@ if page=='editor':
     start,end=edits.get(edit_id,[candidate['start'],candidate['end']])
     active_plan=candidate.get('edit_plan') if edit_id not in edits else None
     render_ranges=active_plan['ranges'] if active_plan else None
+    from project_store import read,write
+    import ending_review,ending_ui
+    if getattr(ending_ui,'ENDING_FORM_API',0)<2:
+        import importlib
+        importlib.reload(ending_review);importlib.reload(ending_ui)
+    from ending_review import context as ending_context,applied as applied_ending
+    ending_path=path.with_suffix('.endings.json');ending_selections=read(ending_path,{})
+    ending_data=None;ending_problem=''
+    if settings['mode']!='Sports':
+        try:
+            opening=read(path.with_suffix('.styles.json'),{}).get(edit_id,{}).get('title',candidate['title'])
+            ending_data=ending_context(ROOT,transcript,render_ranges or [dict(start=start,end=end)],total,settings,opening,
+                str(source)+':'+str(source.stat().st_mtime_ns))
+        except ValueError as error:ending_problem=str(error)
+    selected_ending=applied_ending(ending_selections.get(edit_id),ending_data) if ending_data else None
+    if selected_ending:
+        render_ranges=selected_ending['ranges'];start,end=render_ranges[0]['start'],render_ranges[-1]['end']
+        candidate.update(start=start,end=end,text=selected_ending['final_transcript'])
+        for field in ('audience_review','audience_quality'):candidate.pop(field,None)
+        if active_plan:
+            reviewed_ranges=[]
+            for i,r in enumerate(render_ranges):
+                original=active_plan['ranges'][i]
+                role=('hook_payoff' if len(render_ranges)==1 else 'payoff') if i==len(render_ranges)-1 else original['role']
+                reviewed=dict(r,role=role,reason=selected_ending['reason'] if i==len(render_ranges)-1 else original['reason'])
+                if r['end']<original['end']:
+                    for field in ('first_unit','last_unit'):reviewed.pop(field,None)
+                reviewed_ranges.append(reviewed)
+            active_plan=dict(active_plan,ranges=reviewed_ranges,hook_range=reviewed_ranges[0],payoff_range=reviewed_ranges[-1],
+                context_ranges=[r for r in reviewed_ranges if r['role']=='context'],final_transcript=selected_ending['final_transcript'],
+                recommended_duration=selected_ending['duration'],ending_review=selected_ending,
+                reason_for_each_cut=[r['reason'] for r in reviewed_ranges],
+                standalone_context_check=dict(passed=True,reason=selected_ending['source_check'].get('reason',selected_ending['reason'])),
+                removed_ranges=active_plan['removed_ranges']+selected_ending['removed_ranges'])
+            candidate['edit_plan']=active_plan
     with edit_tab:
         from clip_usage import checkbox as usage_checkbox
         usage_checkbox(folder,path,usage_candidate,'editor')
         st.caption('Transcript review only; listen and review visual content before posting.' if candidate['passed'] else 'Draft · Review the opening and ending before sharing.')
+        updated,apply_ending=ending_ui.ending_form(folder,ending_data,selected_ending,str(path)+edit_id,ending_problem)
+        if apply_ending:
+            if updated is None:ending_selections.pop(edit_id,None)
+            else:ending_selections[edit_id]=updated
+            write(ending_path,ending_selections);st.rerun()
         if candidate.get('edit_plan'):st.caption('Applying manual start/end boundaries exports a continuous source range. Restore suggested boundaries to return to this edited version.')
         from boundary_editor import editor as boundary_editor
         changed=boundary_editor(source,total,start,end,transcript,str(path)+edit_id)
@@ -410,6 +450,8 @@ if page=='editor':
                 from project_store import write
                 if reset:edits.pop(edit_id,None)
                 else:edits[edit_id]=[s,e]
+                if edit_id in ending_selections:
+                    ending_selections.pop(edit_id);write(ending_path,ending_selections)
                 write(edits_path,edits);st.rerun()
         for other in candidates:
             oid=f"{other['start']}-{other['end']}";s,e=edits.get(oid,[other['start'],other['end']])

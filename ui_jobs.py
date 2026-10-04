@@ -49,6 +49,7 @@ def run_job(key,work,estimate):
     try:
         result=job['future'].result()
         bar.progress(1.,text='100% · Complete')
+        timing.caption(f'Completed in {clock(time.monotonic()-job["start"])}')
         return result
     finally:
         job['executor'].shutdown(wait=False)
