@@ -442,11 +442,18 @@ if page=='editor':
     final_words=remap_words(export_words,final_ranges)
     import packaging_ui
     # An already-running server can retain older posting controls.
-    if getattr(packaging_ui,'POST_FORM_API',0)<3:
+    if getattr(packaging_ui,'POST_FORM_API',0)<3 or not getattr(packaging_ui,'OPENING_HOOK_API',0):
         import importlib
         importlib.reload(packaging_ui)
     from packaging_ui import look_form,post_form,advanced
     with look_tab:
+        import opening_ui
+        if not getattr(opening_ui,'OPENING_FORM_API',0):
+            import importlib,opening_hooks
+            importlib.reload(opening_hooks);importlib.reload(opening_ui)
+        from opening_ui import opening_form
+        updated,apply=opening_form(ROOT,folder,package,final_words,settings,style,str(path)+edit_id)
+        if apply:styles[edit_id]=updated;write(style_path,styles);st.rerun()
         updated,apply=look_form(style,package,final_words,settings['mode'],str(path)+edit_id,ranged=bool(render_ranges))
         if apply:styles[edit_id]=updated;write(style_path,styles);st.rerun()
     render_style=dict(style)

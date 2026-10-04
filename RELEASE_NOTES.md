@@ -1,3 +1,11 @@
+# v5.24 · AI opening text
+
+- Adds **Look → Improve the opening with AI**. Generate a short first-screen hook from the final kept transcript and its first three seconds, then explicitly apply it to preview a new export.
+- Tries several hooks, checks the selected wording in a separate local pass, and shows exact supporting subject/payoff quotes. Guards reject placeholders, unsupported acronyms/absolute claims and copied opening questions. Failed generation preserves the previous opening.
+- Uses saved opening/headline presentation lessons from unexcluded **Good pattern** examples. Other clips' facts, titles, transcripts and analytics are not passed as evidence; the full-record review flags are independent of this limited presentation use.
+- Reuses transcription and caches checked suggestions by final cut, model, opening timing and lessons. Generation is on demand, with one bounded retry. Applying changes the text shown for the first three seconds; speech boundaries, internal cuts and social posting copy retain their existing behavior.
+- Keeps manual styling authoritative and retains earlier exports. Sports and silent clips use manual opening text. No new model download or account is needed. The model checks its own suggestion, so wording still requires your review; no retention improvement is established. See [validation](V524_VALIDATION.md).
+
 # v5.23 · Local example library
 
 - Adds **Example library** in the sidebar. Browse supplied clips, actual posted titles, opening text, saved transcripts and sampled frames, with notes on what works and what to avoid copying.

@@ -12,7 +12,7 @@ def _lines(value):
 def show(root):
     st.title('Example library.')
     st.write('Keep clips and titles worth learning from, with notes on what works and what to avoid.')
-    st.caption('Step 1: collect and review examples. These records do not yet change AI editing or titles.')
+    st.caption('Collect and review examples. The opening writer uses opening/headline lessons from Good pattern records. Their facts and analytics are not used to write another clip.')
     try:
         bank = load(root)
     except ValueError as error:

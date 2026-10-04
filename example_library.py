@@ -1,4 +1,4 @@
-"""Local editorial references. This library does not change AI decisions."""
+"""Local editorial references; opening text can use their presentation lessons."""
 import copy
 import hashlib
 import json

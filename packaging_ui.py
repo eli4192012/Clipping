@@ -4,6 +4,7 @@ from pathlib import Path
 from project_store import read, write
 
 POST_FORM_API=3
+OPENING_HOOK_API=1
 
 
 def look_form(style,package,words,mode,identity,ranged=False):
@@ -42,11 +43,15 @@ def look_form(style,package,words,mode,identity,ranged=False):
         pacing='Off' if mode=='Sports' else pacing,conversation='Off' if mode=='Sports' else conversation,
         semantic_emphasis=emphasis,emphasis_style=treatment,speaker_positions=mapping,trim_edges=trim_edges,
         speaker_mapping_confirmed=confirmed,speaker_mapping_fingerprint=package['fingerprint'] if confirmed else '',packaging_version=1)
+    if title!=style.get('title'):
+        for field in ('opening_hook_key','opening_hook_fingerprint'):updated.pop(field,None)
     if submitted and confirmed and set(mapping.values())!={'Left','Right'}:
         st.error('Assign one speaker to each position before confirming. The previous style is kept.')
         return style,False
     if st.button('Use suggested hook',key='hook-'+identity,disabled=not package['hook']):
-        return dict(style,title=package['hook'],packaging_version=1),True
+        restored=dict(style,title=package['hook'],packaging_version=1)
+        for field in ('opening_hook_key','opening_hook_fingerprint'):restored.pop(field,None)
+        return restored,True
     if package['hook']:st.caption('Suggested hook: '+package['hook'])
     return (updated,True) if submitted else (style,False)
 
