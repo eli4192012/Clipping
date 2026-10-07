@@ -17,6 +17,8 @@ Implements the confirmed reliability fixes from the external review: complete ma
 
 GitHub Actions uses a standard `macos-15` Apple Silicon runner, Python 3.13 and pinned official actions. It installs the main lock in a fresh virtual environment, checks dependencies/imports, lints first-party code and runs all tests. Optional sound/alignment model downloads and real publishing are outside CI. Logs and personal media are not uploaded as artifacts.
 
+The first hosted run passed installation, imports and lint, then exposed two older UI tests that depended on this Mac's speech-model files. Those tests now use temporary availability markers without inference and also verify the missing-speech-model disabled state. Hosted checks are rerun on the corrected test fixtures; no application model-availability guard is bypassed.
+
 The watchdog limit is `max(180, output_seconds * 12 + 60)` seconds. It is deliberately longer than the UI estimate and does not imply constant processing speed. Progress uses encoded output time and reaches completion only after the export succeeds. General logs keep types/locations rather than raw messages because provider/model exceptions can contain private data. Installed PyAV/OpenCV imports produce existing duplicate-class warnings on macOS; import and rendering checks succeed despite those warnings.
 
 Evidence files are retained locally under `work/v529-validation/` and excluded from Git. The refreshed live app displays v5.29, reopens an existing seven-clip collection without analysis and loads a saved 12.71-second preview at 0:00 with video/subtitle download controls; the browser reports loaded media with no playback error. Screenshot proof remains local at `work/v529-validation/live-preview.png`.

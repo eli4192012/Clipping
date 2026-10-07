@@ -10,6 +10,16 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 class LocalEditorUITests(unittest.TestCase):
+    def setUp(self):
+        self.models=tempfile.TemporaryDirectory()
+        self.addCleanup(self.models.cleanup)
+        self.speech=Path(self.models.name)/'whisper-base'
+        self.speech.mkdir()
+        # Availability only: inference is forbidden in these settings-screen tests.
+        (self.speech/'model.bin').write_bytes(b'UI test marker, not model weights')
+        marker=patch('engine.SPEECH',self.speech)
+        marker.start();self.addCleanup(marker.stop)
+
     def test_selector_keeps_recommended_default_and_saves_explicit_new_model(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder=Path(tmp);source=folder/'source.mp4';source.write_bytes(b'fixture')
@@ -43,6 +53,9 @@ class LocalEditorUITests(unittest.TestCase):
                 self.assertTrue(next(b for b in app.button if b.label=='Find my clips →').disabled)
                 next(s for s in app.selectbox if s.label=='AI editor').set_value(QWEN3).run();self.assertFalse(app.exception)
                 self.assertFalse(next(b for b in app.button if b.label=='Find my clips →').disabled)
+                (self.speech/'model.bin').unlink()
+                app.run();self.assertFalse(app.exception)
+                self.assertTrue(next(b for b in app.button if b.label=='Find my clips →').disabled)
 
 
 if __name__=='__main__':unittest.main()
