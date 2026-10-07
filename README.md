@@ -42,13 +42,21 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.29**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.30**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
 
 Saved videos can be reopened from the start screen. Settings and previous results are kept locally. Initial processing estimates use video length and selected review options; later estimates use this video's previous measured processing time. Percentages represent processing milestones, not a promise of constant speed.
 
 Individual and combined exports report progress from FFmpeg's encoded output time. A wall-clock watchdog stops a hung export, terminates its process, and removes its new partial video. The limit is the larger of three minutes or twelve times the output duration plus one minute; it is a failure limit, not a processing estimate. Saved source videos, transcripts, earlier exports and analysis caches remain available.
 
 Failed operations keep private diagnostics in `work/logs/app.log`, independent of the launch directory. Logs rotate at 1 MiB with three backups and stay excluded from Git. General and account errors record exception types and call locations without exception messages, locals, transcripts or provider responses; worker failures retain child traceback locations before temporary files are removed. FFmpeg errors keep a bounded diagnostic tail with URLs and token fields removed.
+
+## Complete-idea selection
+
+Enable **Keep complete ideas with AI** in clip preferences. Balanced edits keep the subject, the useful explanation and the conclusion. They favor complete sentences, restore unfinished speech split across transcript pauses, and limit internal deletions to clear acknowledgements, literal repetition or discussion references. The editor keeps the question when the answer needs it, and interview edits may contain at most one detected reporter question. Fast remains an optional shorter version.
+
+The duration slider is a preferred range, not a reason to add unrelated speech. A genuinely brief complete idea can be shorter when the final check explains why no useful explanation is missing. Ideas that cannot fit the maximum are skipped instead of being chopped in half. Unverified edits appear only as original moments in the selection report, in either processing mode.
+
+Earlier analyses stay available. Open an older collection or clip and click **Find fuller clips with updated AI** to create a separate analysis using the saved transcript. New editing and review caches have their own selection version; transcription caches and the global analysis version stay unchanged. Local AI still makes mistakes, especially with missing punctuation or mixed speakers, so review the final speech before posting.
 
 ## Local models
 

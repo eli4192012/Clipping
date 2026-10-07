@@ -43,7 +43,7 @@ def runs_for(project):
             for editor in CHOICES:
                 tag=cache_tag(dict(settings,editor_model=editor))
                 if tag and tag in path.name:settings['editor_model']=editor;break
-            settings['shorts_editor']='-shorts1-' in path.name
+            settings['shorts_editor']=bool(re.search(r'-shorts\d+-',path.name))
             # Recover old run model settings from their recorded signature, not today's UI choice.
             for quality,scenes,speakers,alignment in itertools.product(['Balanced','Higher quality'],[False,True],[False,True],[False,True]):
                 trial=dict(settings,quality=quality,scenes=scenes,speakers=speakers,alignment=alignment)

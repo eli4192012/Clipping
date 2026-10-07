@@ -7,7 +7,7 @@ from analysis_settings import AnalysisSettings
 from modes import VERSION,speech_candidates,sports_candidates,scan_visuals,refine_sports_boundaries,select_highlights
 from vision_sports import visual_candidates
 from upgrades import signature,transcript_file,worker,scene_times,apply_scene_context,VISION4
-CURATION_API=1
+CURATION_API=2
 
 
 def analysis_path(project, settings):
@@ -16,18 +16,20 @@ def analysis_path(project, settings):
     stat=Path(project['source']).stat()
     source_tag=f'{stat.st_size}-{stat.st_mtime_ns}'
     variant='vision'+str(settings['windows']) if mode=='Sports' and settings['vision'] else 'ai' if settings['semantic'] else 'basic'
-    editorial='-shorts1' if settings.get('shorts_editor') and mode!='Sports' else ''
+    from shorts_context import SELECTION_TAG
+    editorial=SELECTION_TAG if settings.get('shorts_editor') and mode!='Sports' else ''
     from local_editor import cache_tag as editor_tag
     from multimodal_curation import cache_tag as curation_tag
     return Path(project['folder'])/f"clips-v{VERSION}-{mode}-{settings['minimum']}-{settings['maximum']}-all-{variant}-c{settings.get('coverage',1.0 if mode!='Sports' else .35)}-v514{editorial}-{signature(settings)}-{source_tag}{cache_tag(settings)}{editor_tag(settings)}{curation_tag(settings)}.json"
 
 
 def timing_key(settings):
-    """Shared identity for measured estimates; retain the original key exactly."""
+    """Separate measured estimates when the actual editorial workload changes."""
     from local_editor import cache_tag as editor_tag
     from multimodal_curation import cache_tag as curation_tag
     mode=settings['mode']
-    return mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
+    from shorts_context import SELECTION_TAG
+    return mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+(SELECTION_TAG if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
 
 
 def estimate_seconds(project, settings):
@@ -58,7 +60,7 @@ def estimate_seconds(project, settings):
             windows=max(1,(max(1,len(sentences))-24+47)//48) if sentences else max(1,round(project['duration']/240))
             count=windows*6
             proposal_seconds=windows*(45 if settings.get('shorts_editor') or settings.get('quality')=='Higher quality' else 20)
-        review=proposal_seconds+count*(45 if settings.get('shorts_editor') else (25 if settings.get('quality')=='Higher quality' else 12))
+        review=proposal_seconds+count*(60 if settings.get('shorts_editor') else (25 if settings.get('quality')=='Higher quality' else 12))
     extra=project['duration']*.05+settings.get('curation_windows',3)*45 if settings.get('multimodal_curation') else 0
     return max(15,transcription+review)+(120 if settings.get('alignment') or settings.get('speakers') else 0)+extra
 
@@ -111,7 +113,9 @@ def analyze(project,settings,progress):
     import hashlib
     selection_inputs=dict(settings)
     for key in ('coverage','min_clips','portrait','auto_mode','video_type','category_selection','multimodal_curation','curation_windows'):selection_inputs.pop(key,None)
-    cache_key=hashlib.sha256(json.dumps([str(source.resolve()),source.stat().st_size,source.stat().st_mtime_ns,transcript,selection_inputs,'reviewed-v514'],sort_keys=True).encode()).hexdigest()
+    from shorts_context import SELECTION_TAG
+    review_version='reviewed-v514'+(SELECTION_TAG if settings.get('shorts_editor') and mode!='Sports' else '')
+    cache_key=hashlib.sha256(json.dumps([str(source.resolve()),source.stat().st_size,source.stat().st_mtime_ns,transcript,selection_inputs,review_version],sort_keys=True).encode()).hexdigest()
     reviewed_path=folder/('reviewed-'+cache_key+'.json')
     prior=read(reviewed_path,None)
     if isinstance(prior,dict) and isinstance(prior.get('candidates'),list):

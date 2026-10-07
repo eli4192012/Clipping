@@ -63,7 +63,8 @@ def run(task,p,progress=lambda p,label:None):
             return load_editor(p,large=True)
         return edit_candidate(p['candidate'],p['sentences'],p['words'],p['maximum'],p['quality'],p['cache_dir'],
             load_bundle,p.get('variant','Balanced'),p.get('baseline'),progress,
-            editor_identity=IDENTITIES[selected_editor(p,large=True)] if p.get('editor_model') else None)
+            editor_identity=IDENTITIES[selected_editor(p,large=True)] if p.get('editor_model') else None,
+            minimum=p.get('minimum',20),mode=p.get('mode','Podcast'))
     if task=='review':
         import engine
         from local_editor import load_bundle

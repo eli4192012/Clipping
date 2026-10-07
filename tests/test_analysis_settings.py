@@ -30,11 +30,12 @@ class SettingsCompatibilityTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 analysis_path({}, dict(self.settings(), **changes))
 
-    def test_measured_estimates_keep_the_original_key_and_handle_corrupt_history(self):
+    def test_measured_estimates_separate_new_editor_work_and_handle_corrupt_history(self):
         for mode in ('Interview', 'Podcast', 'Sports'):
             settings = dict(self.settings(), mode=mode)
             legacy = mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
-            self.assertEqual(timing_key(settings), legacy)
+            self.assertEqual(timing_key(settings),legacy.replace('-shorts1','-shorts5'))
+            if mode!='Sports':self.assertNotEqual(timing_key(settings),legacy)
         with tempfile.TemporaryDirectory() as temp:
             source = Path(temp) / 'source.mp4'
             source.write_text('Source metadata only')

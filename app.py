@@ -12,7 +12,7 @@ from vision_sports import VISION,football_hint
 from modes import PROFILES
 from youtube_import import lookup,download,normalize_url
 import jobs,audience_quality
-if getattr(jobs,'CURATION_API',0)<1 or getattr(audience_quality,'CURATION_API',0)<1:
+if getattr(jobs,'CURATION_API',0)<2 or getattr(audience_quality,'CURATION_API',0)<1:
     import importlib
     importlib.reload(audience_quality);importlib.reload(jobs)
 from jobs import analyze,analysis_path,estimate_seconds
@@ -261,8 +261,8 @@ if page=='settings':
         min_clips=int(st.number_input('Minimum clips to aim for',min_value=1,value=max(1,int(previous.get('min_clips') or 3)),step=1)) if want_minimum else None
         st.caption('No maximum clip count. All suitable, non-overlapping clips are returned within your coverage setting. A minimum is a target, not a reason to add weak clips.')
         portrait=st.toggle('Vertical video · 9:16',value=previous.get('portrait',False))
-        shorts_editor=st.toggle('Edit speech into tighter Shorts',value=previous.get('shorts_editor',True),disabled=mode=='Sports') and mode!='Sports'
-        if shorts_editor:st.caption('Finds a strong opening, removes unnecessary phrases, and checks the ending locally. Uses the larger local editor in both processing modes. Reuses your transcript; other versions are created on request.')
+        shorts_editor=st.toggle('Keep complete ideas with AI',value=previous.get('shorts_editor',True),disabled=mode=='Sports') and mode!='Sports'
+        if shorts_editor:st.caption('Keeps the subject, useful explanation and conclusion. Includes the question when needed. Balanced edits favor complete sentences; a brief complete idea can still be short. Runs locally and reuses your transcript.')
         from sound_analysis import installed as sound_installed
         multimodal=st.toggle('Use speech, visuals & sound to choose clips',value=previous.get('multimodal_curation',sound_installed()))
         if multimodal:
@@ -276,7 +276,7 @@ if page=='settings':
             editor_model=st.selectbox('AI editor',CHOICES,index=CHOICES.index(editor_default),format_func=lambda key:LABELS[key],disabled=mode=='Sports')
             if mode!='Sports':st.caption('Runs on this Mac. Qwen3.5 is available to compare; Qwen3 remains recommended after our saved-video checks. Changing editors reuses speech transcription and creates separate editing results.')
             minimum,maximum=st.slider('Preferred duration (seconds)',5,180,(previous['minimum'],previous['maximum']) if previous.get('mode')==mode else PROFILES[mode]['lengths'],step=5,key='duration-'+mode)
-            st.caption('Complete interviews can be shorter. Sports drafts may extend for context. Suggestions do not overlap.')
+            st.caption('AI keeps useful context toward this duration target. Complete brief ideas can be shorter; longer ideas must fit the maximum. Suggestions do not overlap.')
             coverage=st.slider('Maximum share of the source to keep (%)',10,100,int((previous.get('coverage',.35 if mode=='Sports' else 1.0) if previous.get('mode')==mode else (.35 if mode=='Sports' else 1.0))*100),step=5) / 100
             st.caption('100% permits every distinct topic; clips still cannot overlap. This is a ceiling, not a target.')
             semantic=st.checkbox('Review meaning with local AI',value=mode!='Sports',disabled=True)
@@ -332,6 +332,12 @@ if page=='processing':
     st.stop()
 
 path=Path(st.session_state.result_path);candidates=json.loads(path.read_text())
+if page in ('complete','results','editor') and settings.get('shorts_editor') and settings['mode']!='Sports':
+    from shorts_context import SELECTION_TAG
+    if SELECTION_TAG+'-' not in path.name:
+        st.info('These are earlier suggestions. The updated AI keeps more explanation and checks complete ideas. Re-run this video to get new suggestions; your existing clips and edits stay saved.')
+        if st.button('Find fuller clips with updated AI',key='upgrade-selection-'+str(path)):
+            go('processing')
 if page=='complete':
     st.markdown('<div class="eyebrow">FIRST CUT, FINISHED</div>',unsafe_allow_html=True)
     st.title('Your moments are ready.' if candidates else 'No clear matches this time.')
@@ -368,7 +374,7 @@ if page=='complete':
     elif target:st.success(f'Minimum target reached: {len(candidates)} clips found (target {target}).')
     st.write('Open your collection, then choose a clip to preview and edit. Clips are rendered only when you open them.')
     if candidates and st.button('Open my clips →',type='primary'):go('results')
-    if not candidates:st.info('No topics passed within these settings. Inspect the selection report, increase the maximum duration, or use Balanced with manual review.')
+    if not candidates:st.info('No complete ideas passed within these settings. Review original moments in the selection report or increase the maximum duration.')
     if st.button('Adjust settings'):go('settings')
     st.stop()
 

@@ -1,3 +1,12 @@
+# v5.30 · Clips that keep a complete idea
+
+- Changes Balanced selection from “the shortest explanation” to the subject, useful explanation and conclusion. Uses your preferred duration as a target while allowing genuinely brief complete ideas. Keeps the question when needed and retains the one-question interview limit.
+- Keeps whole sentences and completes speech split across transcript pauses. Restores explanation removed by aggressive internal cuts. Balanced internal deletions are limited to clear acknowledgements, literal repetition and discussion references; Fast remains an optional shorter edit.
+- Improves interview source boundaries: keeps named setup, separates actual questions from lowercase continuations, excludes moderator transitions and counts a detected confirmation even when Whisper omitted its question mark.
+- Adds final-speech evidence for the subject, explanation and conclusion, plus an explicit check that any kept question is answered. Rejects incomplete endings, unnamed-person openings, reporter-only setups and unverified edits in both processing modes. Current structural guards also run on cached edits. One bounded repair can fix a rejected plan or invalid evidence references; every final check still has to pass. Original moments remain available in the selection report.
+- Adds **Find fuller clips with updated AI** to older results. Reuses the transcript, saves a separate analysis and leaves prior clips, manual edits and exports available. New editor/review/timing cache identities reflect the changed work without changing transcription caches or `modes.VERSION`.
+- All processing stays local with the installed AI editor. Full regression tests and saved-video validation are documented in [validation](V530_VALIDATION.md). Longer kept speech and more detailed checking can increase processing and rendering time; fewer clips may pass.
+
 # v5.29 · Reliable installs, exports and diagnostics
 
 - Fixes the pinned install list: Keychain support, scene detection and higher-quality MLX transcription now include all required packages. Uses the working local versions and checks direct constraints plus native imports in a clean environment.
