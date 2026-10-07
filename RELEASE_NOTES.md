@@ -1,3 +1,12 @@
+# v5.29 · Reliable installs, exports and diagnostics
+
+- Fixes the pinned install list: Keychain support, scene detection and higher-quality MLX transcription now include all required packages. Uses the working local versions and checks direct constraints plus native imports in a clean environment.
+- Shows actual encoding progress for individual clips as well as combined videos. A wall-clock watchdog works even when FFmpeg stops producing output; failures stop and reap the process and remove the new partial video. Earlier exports remain available. Caption paths with spaces, apostrophes and punctuation are escaped consistently.
+- Keeps private, rotating local diagnostics in `work/logs/app.log`. Failed jobs and UI actions record exception types and call locations; worker traceback locations survive temporary-folder cleanup. Account/provider messages and transcripts are excluded from general logs. FFmpeg diagnostics are bounded and redact URLs and token fields.
+- Adds GitHub Actions on Apple Silicon: a fresh pinned install, dependency/import checks, scoped first-party lint and the regression suite, including real video/audio/caption exports. Vendored code, model weights and personal media are excluded from the checks' source requirements.
+- Validates analysis controls without rewriting saved settings; shares the existing timing key between estimate reads and writes and tolerates damaged timing history. Binds loop callbacks explicitly and removes an unused import. All 51 saved settings/run combinations checked retain their original analysis paths; the analysis-cache VERSION remains unchanged.
+- Updates the README for the public repository and development branch. All transcription, inference and editing stay local. **348 tests passed** on this Mac; see [validation](V529_VALIDATION.md). This release improves reliability and diagnostics; editorial quality and model-speed changes remain separate work.
+
 # v5.28 · Local speech, visual and sound curation
 
 - Adds **Use speech, visuals & sound to choose clips** in project settings. Reuses speech editing, then combines local sound classification and sampled-frame observations before final moment selection. Choose 1–6 moments for heavier visual review, default 3.

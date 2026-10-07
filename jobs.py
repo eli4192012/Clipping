@@ -2,7 +2,8 @@
 import json
 import time
 from pathlib import Path
-from engine import transcribe,review_candidates
+from engine import transcribe
+from analysis_settings import AnalysisSettings
 from modes import VERSION,speech_candidates,sports_candidates,scan_visuals,refine_sports_boundaries,select_highlights
 from vision_sports import visual_candidates
 from upgrades import signature,transcript_file,worker,scene_times,apply_scene_context,VISION4
@@ -11,7 +12,7 @@ CURATION_API=1
 
 def analysis_path(project, settings):
     from content_categories import cache_tag
-    mode=settings['mode']
+    mode=AnalysisSettings.read(settings).mode
     stat=Path(project['source']).stat()
     source_tag=f'{stat.st_size}-{stat.st_mtime_ns}'
     variant='vision'+str(settings['windows']) if mode=='Sports' and settings['vision'] else 'ai' if settings['semantic'] else 'basic'
@@ -21,16 +22,25 @@ def analysis_path(project, settings):
     return Path(project['folder'])/f"clips-v{VERSION}-{mode}-{settings['minimum']}-{settings['maximum']}-all-{variant}-c{settings.get('coverage',1.0 if mode!='Sports' else .35)}-v514{editorial}-{signature(settings)}-{source_tag}{cache_tag(settings)}{editor_tag(settings)}{curation_tag(settings)}.json"
 
 
+def timing_key(settings):
+    """Shared identity for measured estimates; retain the original key exactly."""
+    from local_editor import cache_tag as editor_tag
+    from multimodal_curation import cache_tag as curation_tag
+    mode=settings['mode']
+    return mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
+
+
 def estimate_seconds(project, settings):
     folder=Path(project['folder'])
     if analysis_path(project,settings).exists():return 1
     history=folder/'ui-timing.json'
-    from local_editor import cache_tag as editor_tag
-    from multimodal_curation import cache_tag as curation_tag
-    key=settings['mode']+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and settings['mode']!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
+    key=timing_key(settings)
     if history.exists():
-        measured=json.loads(history.read_text()).get(key)
-        if measured: return measured
+        from project_store import read
+        import math
+        history_data=read(history,{})
+        measured=history_data.get(key) if isinstance(history_data,dict) else None
+        if isinstance(measured,(int,float)) and math.isfinite(measured) and measured>0:return measured
     transcription=0 if transcript_file(folder,settings).exists() else project['duration']*.5+15
     review=settings['windows']*240 if settings['mode']=='Sports' and settings['vision'] else 10
     if settings['semantic'] and settings['mode']!='Sports':
@@ -170,12 +180,11 @@ def analyze(project,settings,progress):
                 event['status']='Kept' if draft in candidates else 'Excluded: '+next((e['reason'] for e in exclusions if e['start']==draft['start'] and e['end']==draft['end']),'selection limit')
         if not settings['vision']:diagnostics.update(found=before_count,reviewed=0,review_succeeded=0,note='Motion-only drafts; local AI frame review disabled.')
         path.with_suffix('.diagnostics.json').write_text(json.dumps(diagnostics,indent=2))
-    history=folder/'ui-timing.json';data=json.loads(history.read_text()) if history.exists() else {}
-    from local_editor import cache_tag as editor_tag
-    from multimodal_curation import cache_tag as curation_tag
-    key=mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
+    history=folder/'ui-timing.json';data=read(history,{})
+    if not isinstance(data,dict):data={}
+    key=timing_key(settings)
     if not isinstance(prior,dict):
-        data[key]=time.monotonic()-begun;history.write_text(json.dumps(data))
+        data[key]=time.monotonic()-begun;write(history,data)
     from project_store import save_run
     save_run(project,settings,path)
     progress(1,'Ready to review')

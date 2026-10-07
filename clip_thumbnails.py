@@ -1,4 +1,5 @@
 """Cached thumbnails from the actual rendered clip; no model or network calls."""
+from app_logging import log_exception
 import hashlib
 import json
 from pathlib import Path
@@ -154,6 +155,7 @@ def show(video,folder,title):
             with st.spinner('Preparing local thumbnails…'):
                 cache,result=generate(video,folder)
         except Exception as error:
+            log_exception('clip_thumbnails')
             st.warning(f'Could not prepare thumbnails: {error}')
             return
         saved=read(cache/'selected.json',{})

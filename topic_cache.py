@@ -55,7 +55,7 @@ def reviewed_topics(payload,load_bundle,progress=None):
             try:
                 result=edit_candidate(candidate,payload['sentences'],payload.get('words',[]),payload['maximum'],payload['quality'],
                     str(folder/'shorts') if folder else None,model,
-                    progress=lambda p,label:progress(.35+.65*(index+p)/max(1,len(candidates)),f'Moment {index+1} of {len(candidates)} · {label}'),
+                    progress=lambda p,label,index=index:progress(.35+.65*(index+p)/max(1,len(candidates)),f'Moment {index+1} of {len(candidates)} · {label}'),
                     editor_identity=editor_identity)
             except (ValueError,TypeError,AttributeError,KeyError) as error:
                 # An unverified splice never silently becomes the recommended export.

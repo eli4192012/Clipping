@@ -1,0 +1,6 @@
+target-version = "py313"
+extend-exclude = ["vendor", "work", "data", "exports", "models", ".venv*"]
+
+[lint]
+# Gate fatal syntax/name errors across legacy code without blanket reformatting.
+select = ["E9", "F821", "F822", "F823"]

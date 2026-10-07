@@ -1,4 +1,5 @@
 """Inspect source-timed curation evidence without triggering inference on view."""
+from app_logging import log_exception
 import json
 from pathlib import Path
 import streamlit as st
@@ -57,4 +58,6 @@ def review_form(project,transcript,candidate,settings):
             st.session_state['curation-'+identity]=reviewed[0]
             for failure in report['failures']:st.warning(failure)
             st.rerun()
-        except Exception as error:st.error('Could not review this moment: '+str(error).splitlines()[-1][:250])
+        except Exception as error:
+            log_exception('multimodal_ui')
+            st.error('Could not review this moment: '+str(error).splitlines()[-1][:250])

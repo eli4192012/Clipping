@@ -3,7 +3,6 @@ import hashlib
 import json
 import math
 import re
-import subprocess
 import uuid
 from pathlib import Path
 from project_store import read, write
@@ -172,29 +171,9 @@ def assembly_fingerprint(draft):
     return fingerprint([VERSION, states, FORMATS[draft['format']], draft['background'], FPS])
 
 
-def _run(command, report):
-    """Use encoded output time for progress; retain bounded diagnostics on failure."""
-    import tempfile
-    with tempfile.TemporaryFile(mode='w+t') as errors:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors, text=True)
-        try:
-            for line in process.stdout:
-                if line.startswith('out_time_us='):
-                    try:
-                        report(max(0, int(line.split('=', 1)[1])/1_000_000))
-                    except ValueError:
-                        pass
-            code = process.wait()
-        finally:
-            if process.poll() is None:
-                process.terminate()
-                process.wait()
-            process.stdout.close()
-        if code:
-            errors.seek(0, 2)
-            size = errors.tell()
-            errors.seek(max(0, size-3500))
-            raise RuntimeError('Could not combine the clips: '+errors.read())
+def _run(command, report, length):
+    from ffmpeg_export import run_ffmpeg
+    run_ffmpeg(command, length, report)
 
 
 def _normalize(video, info, target, canvas, background, report):
@@ -218,7 +197,7 @@ def _normalize(video, info, target, canvas, background, report):
                 '-t', f'{length:.6f}', '-map_metadata', '-1', '-map_chapters', '-1',
                 '-threads', '2', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-bf', '0',
                 '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2', '-progress', 'pipe:1', '-nostats', str(target)]
-    _run(command, report)
+    _run(command, report, length)
 
 
 def export_combination(root, draft, progress=lambda value, label: None):
@@ -289,7 +268,7 @@ def export_combination(root, draft, progress=lambda value, label: None):
                 '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
                 '-threads', '2', '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', str(temporary)]
     try:
-        _run(command, lambda at: progress(.78+.17*min(1, at/offset), 'Joining clips and writing the combined video'))
+        _run(command, lambda at: progress(.78+.17*min(1, at/offset), 'Joining clips and writing the combined video'), offset)
         output_info = media_info(temporary)
         temporary.replace(video)
     finally:

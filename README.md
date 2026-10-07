@@ -7,7 +7,7 @@ A local video clipping studio for this Apple Silicon Mac. No paid AI APIs or acc
 This app requires an Apple Silicon Mac. The current development environment uses Python 3.13.14. Install Python 3.13 and put Node.js on your PATH if you want YouTube imports. Then run:
 
 ```sh
-git clone https://github.com/eli4192012/Clipping.git
+git clone --branch codex/v5.17-visual-packaging https://github.com/eli4192012/Clipping.git
 cd Clipping
 python3.13 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
@@ -16,7 +16,7 @@ python3.13 -m venv .venv
 ./Start\ Clipping.command
 ```
 
-The private repository requires access to the GitHub account. `requirements.lock.txt` records the installed dependency versions; `requirements.txt` lists the direct dependency constraints. Model setup downloads files from Hugging Face and the pinned OpenCV YuNet face detector and needs internet access and several GB of free space. Transcription, model inference and editing then run locally. Alignment and speaker detection have separate optional setup commands described below.
+The repository is public. The setup command selects the development branch in [draft PR #1](https://github.com/eli4192012/Clipping/pull/1), which contains the version described here. `requirements.lock.txt` pins the complete main environment, including MLX Whisper, scene detection and Keychain support; `requirements.txt` lists the direct dependency constraints. Model setup downloads files from Hugging Face and the pinned OpenCV YuNet face detector and needs internet access and several GB of free space. Transcription, model inference and editing then run locally. Alignment and speaker detection have separate optional setup commands described below.
 
 The repository contains the app, tests and documentation. Your videos, saved project transcripts, exports, downloaded models, virtual environments, worker artifacts and credentials stay on this Mac and are excluded from Git. Small regression fixtures in `tests/fixtures/` are included for the tests. Validation reports refer to local media and work files that are not included in a clone. GitHub is a code backup; back up your local projects and exports separately.
 
@@ -25,6 +25,10 @@ Run the test suite after installing the dependencies:
 ```sh
 .venv/bin/python -m unittest discover -s tests -q
 ```
+
+For development checks, install `requirements-dev.txt`, then run `.venv/bin/ruff check .`, `.venv/bin/python -m pip check` and `.venv/bin/python scripts/check_install.py`. The import check does not download or load model weights. GitHub Actions runs the same checks and regression tests on an Apple Silicon Mac, starting with a fresh environment. Lint checks syntax and undefined names in first-party code; vendored upstream files are excluded.
+
+When direct dependencies change, regenerate the lock on Apple Silicon with Python 3.13 using `.venv/bin/uv pip compile requirements.txt --python .venv/bin/python --no-header --no-annotate --no-emit-index-url --output-file requirements.lock.txt`, then test installation in a fresh environment. The existing lock keeps compatible pins unless explicitly upgraded. The sound and optional speech environments remain separate.
 
 ## Open
 
@@ -38,9 +42,13 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.28**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.29**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
 
 Saved videos can be reopened from the start screen. Settings and previous results are kept locally. Initial processing estimates use video length and selected review options; later estimates use this video's previous measured processing time. Percentages represent processing milestones, not a promise of constant speed.
+
+Individual and combined exports report progress from FFmpeg's encoded output time. A wall-clock watchdog stops a hung export, terminates its process, and removes its new partial video. The limit is the larger of three minutes or twelve times the output duration plus one minute; it is a failure limit, not a processing estimate. Saved source videos, transcripts, earlier exports and analysis caches remain available.
+
+Failed operations keep private diagnostics in `work/logs/app.log`, independent of the launch directory. Logs rotate at 1 MiB with three backups and stay excluded from Git. General and account errors record exception types and call locations without exception messages, locals, transcripts or provider responses; worker failures retain child traceback locations before temporary files are removed. FFmpeg errors keep a bounded diagnostic tail with URLs and token fields removed.
 
 ## Local models
 

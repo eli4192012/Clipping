@@ -1,4 +1,5 @@
 """Review ending suggestions before explicitly applying a non-destructive trim."""
+from app_logging import log_exception
 import streamlit as st
 from ending_review import cached, get_ending, with_editor
 from local_editor import installed, LABELS
@@ -28,6 +29,7 @@ def ending_form(folder, data, saved, identity, unavailable_reason=''):
             from ui_jobs import run_job
             try: result = run_job('ending-' + data['key'], lambda update: get_ending(folder, data, update, force=fresh), 60)
             except Exception as error:
+                log_exception('ending_ui')
                 detail = (str(error).splitlines() or ['Review the boundary manually.'])[-1][:300]
                 st.error('Could not review the ending: ' + detail)
         if result:

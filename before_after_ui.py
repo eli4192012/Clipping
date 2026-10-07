@@ -1,4 +1,5 @@
 """Play real before/after exports and save human preferences separately."""
+from app_logging import log_exception
 import json
 from pathlib import Path
 import streamlit as st
@@ -20,6 +21,7 @@ def show(root, go):
             st.session_state.before_after_selected=report['id']
             st.session_state['before-after-picker']=report['id']
         except Exception as error:
+            log_exception('before_after_ui')
             st.error('Could not create the comparison: '+str(error).splitlines()[-1][:350])
         finally:st.session_state.pop('before_after_pending',None)
     items=reports(root)

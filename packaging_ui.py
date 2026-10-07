@@ -1,4 +1,5 @@
 """Creator-facing Look, Post and Advanced controls for a finished edit."""
+from app_logging import log_exception
 import json
 from pathlib import Path
 from project_store import read, write
@@ -111,7 +112,9 @@ def post_form(folder,package,settings=None,active=False):
                         st.session_state['youtube-title-'+key]=updated['title']
                         st.session_state['youtube-description-'+key]=updated['description']
                         st.rerun()
-                    except Exception as error:st.error('Could not generate posting text: '+posting_error(error))
+                    except Exception as error:
+                        log_exception('packaging_ui')
+                        st.error('Could not generate posting text: '+posting_error(error))
                 if not post.get('title') or not post.get('description'):st.info('Posting text is ready after AI generation, or you can write it below. The transcript is not used as the description.')
                 if post.get('ai_model') and post.get('copy_origin')!='manual':st.caption('AI hook selected · '+post['ai_model'].split(':',1)[0]+'. Review the wording before posting.')
                 if len(post.get('title_options',[]))>1:

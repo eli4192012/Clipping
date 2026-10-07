@@ -1,4 +1,5 @@
 """Choose one checked edit, inspect its decisions, request other edits only on demand."""
+from app_logging import log_exception
 import hashlib
 import json
 from project_store import read, write
@@ -27,7 +28,9 @@ def choose_edit(folder, analysis, candidate, transcript, settings):
                 saved[identity] = dict(edits, Balanced=result)
                 write(saved_path, saved)
                 st.rerun()
-            except Exception as error: st.warning('A safe Shorts edit was not produced: '+str(error))
+            except Exception as error:
+                log_exception('shorts_ui')
+                st.warning('A safe Shorts edit was not produced: '+str(error))
         return candidate, 'Original moment'
     choices = [name for name in ('Balanced','Fast','Full Context') if name in edits] + ['Original moment']
     key = 'edit-variant-'+identity
@@ -46,7 +49,7 @@ def choose_edit(folder, analysis, candidate, transcript, settings):
         if st.button('Create '+name+' edit locally', key='generate-'+name+identity, help=option['reason']):
             try:
                 baseline = {k:primary['edit_plan'][k] for k in ('ranges','recommended_duration','final_transcript')}
-                result = run_job('variant-'+name+identity, lambda update:worker('shorts_edit', dict(candidate=source,
+                result = run_job('variant-'+name+identity, lambda update,name=name,baseline=baseline:worker('shorts_edit', dict(candidate=source,
                     sentences=transcript['sentences'], words=transcript['words'], maximum=settings['maximum'],
                     quality=settings.get('quality','Balanced'), editor_model=settings.get('editor_model'), cache_dir=str(folder/'topic-reviews-v37/shorts'),
                     variant=name, baseline=baseline), progress=update), 60)
@@ -54,7 +57,9 @@ def choose_edit(folder, analysis, candidate, transcript, settings):
                 write(saved_path, saved)
                 st.session_state['pending-'+key] = name
                 st.rerun()
-            except Exception as error: st.warning('This source did not produce a verified '+name+' edit: '+str(error))
+            except Exception as error:
+                log_exception('shorts_ui')
+                st.warning('This source did not produce a verified '+name+' edit: '+str(error))
     return chosen, selected
 
 

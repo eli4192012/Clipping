@@ -51,6 +51,10 @@ def run_job(key,work,estimate):
         bar.progress(1.,text='100% · Complete')
         timing.caption(f'Completed in {clock(time.monotonic()-job["start"])}')
         return result
+    except Exception:
+        from app_logging import log_exception
+        log_exception('Background job failed')
+        raise
     finally:
         job['executor'].shutdown(wait=False)
         del st.session_state[state_key]

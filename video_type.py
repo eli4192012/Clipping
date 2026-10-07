@@ -1,4 +1,5 @@
 """Offline mode routing from speech, title and sampled face evidence."""
+from app_logging import log_exception
 import hashlib,json,re,subprocess,tempfile
 from pathlib import Path
 
@@ -52,7 +53,9 @@ def detect(project,progress=lambda p,t:None):
                     try:
                         if recognizer is None:recognizer=speech_model()
                         sentences.extend(transcribe(sample,model=recognizer)['sentences'])
-                    except Exception:notes.append('Speech detection unavailable; used remaining evidence.');break
+                    except Exception:
+                        log_exception('video_type')
+                        notes.append('Speech detection unavailable; used remaining evidence.');break
             del recognizer
         else:notes.append('No audio track found.')
     progress(.75,'Checking whether people stay visible')
@@ -61,6 +64,7 @@ def detect(project,progress=lambda p,t:None):
         visual=inspect_framing(source,0,project['duration'])
         fraction=visual.get('single_face_samples',0)/max(1,visual.get('sample_count',0))
     except Exception:
+        log_exception('video_type')
         fraction=0;notes.append('Visual detection unavailable.')
     result=classify(project['title'],sentences,fraction)
     from content_categories import inferred

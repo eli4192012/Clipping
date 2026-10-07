@@ -1,4 +1,5 @@
 """On-demand opening suggestions; applying them changes only first-screen text."""
+from app_logging import log_exception
 import streamlit as st
 from opening_hooks import context, cached_hook, get_hook
 from local_editor import installed, LABELS
@@ -32,6 +33,7 @@ def opening_form(root, folder, package, words, settings, style, identity):
             try:
                 result = run_job('opening-' + info['key'], lambda update: get_hook(folder, package, info, update, force=fresh), 60)
             except Exception as error:
+                log_exception('opening_ui')
                 detail = (str(error).splitlines() or ['Try again or enter opening text manually.'])[-1][:240]
                 st.error('Could not generate an opening: ' + detail)
         if result:

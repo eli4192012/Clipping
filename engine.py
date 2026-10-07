@@ -2,8 +2,8 @@
 import json
 import math
 import re
-import subprocess
 from pathlib import Path
+from ffmpeg_export import ass_filter, run_ffmpeg
 
 ROOT = Path(__file__).resolve().parent
 SPEECH = ROOT / "models" / "whisper-base"
@@ -186,9 +186,9 @@ def subtitles(words, start, end):
     return "\n".join(lines)
 
 
-def export_clip(source, start, end, words, vertical=False, presentation=None, ranges=None):
+def export_clip(source, start, end, words, vertical=False, presentation=None, ranges=None, progress=None, timeout=None):
     if ranges is not None or (presentation or {}).get('packaging_version'):
-        return export_timeline(source, ranges if ranges is not None else [dict(start=start,end=end)], words, vertical, presentation)
+        return export_timeline(source, ranges if ranges is not None else [dict(start=start,end=end)], words, vertical, presentation, progress, timeout)
     import imageio_ffmpeg
     total = duration(source)
     if not all(math.isfinite(v) for v in (start, end)) or not 0 <= start < end <= total + 0.1:
@@ -196,6 +196,7 @@ def export_clip(source, start, end, words, vertical=False, presentation=None, ra
     import uuid
     name = f"clip-{start:.1f}-{end:.1f}-{uuid.uuid4().hex[:6]}"
     output = ROOT / "exports" / f"{name}.mp4"
+    output.parent.mkdir(parents=True, exist_ok=True)
     captions = output.with_suffix(".srt")
     captions.write_text(subtitles(words, start, end), encoding="utf-8")
     command = [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
@@ -227,19 +228,21 @@ def export_clip(source, start, end, words, vertical=False, presentation=None, ra
         if layout!=LAYOUTS[0]:w,h=720,1280
         ass=output.with_suffix('.ass')
         write_ass(ass,words,start,end,w,h,options.get('burn',False),options.get('title',''))
-        filters+=",ass='"+str(ass).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")+"'"
+        filters += ',' + ass_filter(ass)
     if complex_filter:
         vi=command.index('0:v:0');del command[vi-1:vi+1]
     command += ['-filter_complex' if complex_filter else '-vf',filters]
-    command.append(str(output))
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode:
+    command += ['-progress', 'pipe:1', '-nostats', str(output)]
+    try:
+        run_ffmpeg(command, end-start, lambda at: progress(min(.99, at/(end-start)), 'Encoding the selected clip') if progress else None, timeout)
+    except BaseException:
         output.unlink(missing_ok=True)
-        raise RuntimeError("Export failed: " + result.stderr[-1800:])
+        raise
+    if progress: progress(1., 'Clip saved')
     return output, captions
 
 
-def export_timeline(source, ranges, words, vertical=False, presentation=None):
+def export_timeline(source, ranges, words, vertical=False, presentation=None, progress=None, timeout=None):
     """Render one chosen edit; both media streams and all captions use the same ranges."""
     import imageio_ffmpeg, uuid, av
     from edit_timeline import validate_ranges, timeline_duration, remap_words, concat_filter
@@ -276,8 +279,7 @@ def export_timeline(source, ranges, words, vertical=False, presentation=None):
         ass = output.with_suffix('.ass')
         write_ass(ass, final_words, 0, length, width, height, options.get('burn', False), options.get('title', ''),
                   options.get('_emphasis') if options.get('semantic_emphasis') else None,options.get('emphasis_style','Bold'))
-        escaped = str(ass).replace('\\', '\\\\').replace(':', '\\:').replace("'", "\\'")
-        style_filter += ",ass='" + escaped + "'"
+        style_filter += ',' + ass_filter(ass)
     base = ranges[0]['start']
     relative = [dict(start=r['start']-base, end=r['end']-base) for r in ranges]
     graph = concat_filter(relative, audio) + ';[cutv]' + style_filter + '[outv]'
@@ -289,10 +291,12 @@ def export_timeline(source, ranges, words, vertical=False, presentation=None):
     if audio: command += ['-map', '[cuta]']
     if has_captions: command += ['-map', '1:0', '-c:s', 'mov_text', '-metadata:s:s:0', 'language=eng']
     command += ['-threads', '2', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
-        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', str(output)]
-    result = subprocess.run(command, capture_output=True, text=True)
-    if result.returncode:
+        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', str(output)]
+    try:
+        run_ffmpeg(command, length, lambda at: progress(min(.99, at/length), 'Encoding the edited clip') if progress else None, timeout)
+    except BaseException:
         output.unlink(missing_ok=True)
-        raise RuntimeError('Edited export failed: ' + result.stderr[-1800:])
+        raise
     output.with_suffix('.timeline.json').write_text(json.dumps(dict(source=str(Path(source).resolve()),ranges=ranges, duration=length), indent=2))
+    if progress: progress(1., 'Edited clip saved')
     return output, captions

@@ -1,3 +1,4 @@
+from app_logging import log_exception
 from resource_limits import configure
 configure()
 import hashlib
@@ -126,14 +127,18 @@ if page=='source':
                 source=folder/('source'+Path(upload.name).suffix.lower())
                 if not source.exists():source.write_bytes(upload.getbuffer())
                 try:set_project(source,folder,upload.name)
-                except Exception as error:st.error(str(error))
+                except Exception as error:
+                    log_exception('app')
+                    st.error(str(error))
         else:
             link=st.text_input('YouTube video link',placeholder='Paste a watch or Shorts link…')
             if st.button('Find video',type='primary'):
                 st.session_state.pop('youtube_info',None)
                 try:
                     with st.spinner('Finding your video…'):st.session_state.youtube_info=lookup(link)
-                except Exception as error:st.error(f'Could not find the video: {error}')
+                except Exception as error:
+                    log_exception('app')
+                    st.error(f'Could not find the video: {error}')
             try:current,_=normalize_url(link)
             except ValueError:current=None
             info=st.session_state.get('youtube_info')
@@ -143,7 +148,9 @@ if page=='source':
                     status=st.empty()
                     try:
                         source,folder=download(info,status.info);set_project(source,folder,info['title'])
-                    except Exception as error:st.error(f'Import failed: {error}')
+                    except Exception as error:
+                        log_exception('app')
+                        st.error(f'Import failed: {error}')
             st.caption('Use videos you own or are permitted to download and edit. Internet is needed for YouTube imports and social publishing.')
     if st.button('Open my saved projects →'):go('library')
     st.stop()
@@ -318,6 +325,7 @@ if page=='processing':
         result=run_job(key,lambda update:analyze(project,settings,update),estimate_seconds(project,settings))
         st.session_state.result_path=result;go('complete')
     except Exception as error:
+        log_exception('app')
         st.error(f'Processing stopped: {error}')
         st.caption('Your video and completed transcript are saved. You can retry.')
         if st.button('Back to settings'):go('settings')
@@ -561,6 +569,7 @@ if page=='editor':
                 else:scene=inspect_scene(source,final_ranges)
                 render_style['_visual_plan']=plan_camera(scene,final_words,final_ranges,package,style,settings['mode'])
             except Exception as error:
+                log_exception('app')
                 with look_tab:st.warning('Automatic camera planning was unavailable; using full picture. '+str(error))
                 render_style['layout']=LAYOUTS[1]
     render_signature=[digest,source.stat().st_mtime_ns,transcript_path.stat().st_mtime_ns,render_start,render_end,render_style,export_words]
@@ -573,7 +582,8 @@ if page=='editor':
         else:
             def render(update):
                 update(.05,'Rendering the selected clip')
-                return export_clip(source,render_start,render_end,export_words,settings.get('portrait',False),presentation=render_style,ranges=render_ranges)
+                return export_clip(source,render_start,render_end,export_words,settings.get('portrait',False),presentation=render_style,ranges=render_ranges,
+                                   progress=lambda p,label:update(.05+.94*p,label))
             video,captions=run_job('render-'+render_id,render,max(15,timeline_duration(final_ranges)*2))
             write(manifest,[str(video),str(captions)])
         with preview:
@@ -591,6 +601,7 @@ if page=='editor':
             if decision.get('reason'):st.caption(decision['reason'])
             for warning in decision.get('warnings',[]):st.warning(warning)
     except Exception as error:
+        log_exception('app')
         with preview:st.error(f'Could not render the clip: {error}')
     with post_tab:
         posting_copy=post_form(folder,package,settings,active=post_tab.open)

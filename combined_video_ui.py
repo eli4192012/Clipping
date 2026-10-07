@@ -1,4 +1,5 @@
 """A small persistent playlist builder for finished local clips."""
+from app_logging import log_exception
 from pathlib import Path
 import streamlit as st
 from ui_jobs import clock, run_job
@@ -112,6 +113,7 @@ def show(root):
             save_draft(root, draft)
             st.rerun()
         except Exception as error:
+            log_exception('combined_video_ui')
             st.error(str(error))
     result = draft.get('last_export')
     if result and Path(result['video']).is_file():

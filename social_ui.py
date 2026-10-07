@@ -1,4 +1,5 @@
 """Accounts, per-export drafts, explicit publishing and persistent history."""
+from app_logging import log_exception
 import json
 from pathlib import Path
 from urllib.parse import urlparse
@@ -17,7 +18,9 @@ def accounts_screen():
             st.subheader(account['name']);st.caption(account['platform'].title()+' · Connected')
             if st.button('Disconnect',key='disconnect-'+account['id']):
                 try:auth.disconnect(account);st.rerun()
-                except Exception:st.error('Could not remove Keychain credentials. Try again after unlocking your Keychain.')
+                except Exception:
+                    log_exception('social_ui')
+                    st.error('Could not remove Keychain credentials. Try again after unlocking your Keychain.')
     st.caption('Disconnect removes the local login. To revoke access at the platform too, use Google Account permissions or Facebook Business Integrations.')
     yt,ig=st.tabs(['YouTube','Instagram'])
     with yt:
@@ -30,10 +33,14 @@ def accounts_screen():
             if st.button('Save Google setup',disabled=uploaded is None):
                 try:auth.secret('config:youtube',auth.google_config(json.loads(uploaded.getvalue())));st.success('Saved securely in Keychain.')
                 except ValueError as e:st.error(str(e))
-                except Exception:st.error('Could not save setup to macOS Keychain.')
+                except Exception:
+                    log_exception('social_ui')
+                    st.error('Could not save setup to macOS Keychain.')
         if st.button('Connect YouTube'):
             try:st.session_state['social_google']=auth.begin_google()
-            except Exception:st.error('Save valid Google setup and unlock Keychain before connecting.')
+            except Exception:
+                log_exception('social_ui')
+                st.error('Save valid Google setup and unlock Keychain before connecting.')
         pending=st.session_state.get('social_google')
         if pending:
             st.link_button('Sign in with Google',pending['url'])
@@ -41,7 +48,9 @@ def accounts_screen():
             if st.button('Finish connecting YouTube'):
                 try:auth.finish_google(pending);st.session_state.pop('social_google',None);st.rerun()
                 except auth.SocialError as e:st.error(str(e))
-                except Exception:st.error('Connection failed. Start a new login and check Google setup.')
+                except Exception:
+                    log_exception('social_ui')
+                    st.error('Connection failed. Start a new login and check Google setup.')
     with ig:
         st.subheader('Connect Instagram')
         st.info('Direct local uploads require a Creator or Business Instagram account linked to a Facebook Page, plus a Meta app with Facebook Login for Business.')
@@ -60,10 +69,14 @@ def accounts_screen():
                         st.error('Enter both numeric IDs, an app secret and a valid HTTPS callback URL without query parameters.')
                     else:
                         try:auth.secret('config:instagram',dict(client_id=app_id,client_secret=app_secret,config_id=config_id,redirect_uri=redirect));st.success('Saved securely in Keychain.')
-                        except Exception:st.error('Could not save setup to macOS Keychain.')
+                        except Exception:
+                            log_exception('social_ui')
+                            st.error('Could not save setup to macOS Keychain.')
         if st.button('Connect Instagram'):
             try:st.session_state['social_meta']=auth.begin_meta()
-            except Exception:st.error('Save Meta setup and unlock Keychain before connecting.')
+            except Exception:
+                log_exception('social_ui')
+                st.error('Save Meta setup and unlock Keychain before connecting.')
         pending=st.session_state.get('social_meta')
         if pending:
             st.link_button('Sign in with Facebook for Instagram',pending['url'])
@@ -72,7 +85,9 @@ def accounts_screen():
                 if st.form_submit_button('Finish connecting Instagram'):
                     try:auth.finish_meta(pending,callback);st.session_state.pop('social_meta',None);st.rerun()
                     except auth.SocialError as e:st.error(str(e))
-                    except Exception:st.error('Connection failed. Start a new login and check Meta setup.')
+                    except Exception:
+                        log_exception('social_ui')
+                        st.error('Connection failed. Start a new login and check Meta setup.')
     with st.expander('Setup guide & platform requirements'):
         st.markdown((store.ROOT/'SOCIAL_SETUP.md').read_text())
 
@@ -89,7 +104,9 @@ def draft_panel(draft):
         if st.button('Start a new draft after this failure',key='retry-'+draft['id']):
             try:publisher.retry_failed(draft['id']);st.rerun()
             except auth.SocialError as e:st.error(str(e))
-            except Exception:st.error('Could not reset this attempt. The history was preserved.')
+            except Exception:
+                log_exception('social_ui')
+                st.error('Could not reset this attempt. The history was preserved.')
     if draft['status']=='Published':
         st.success('Publication confirmed. This clip is marked Used.')
         if draft['platform']=='youtube':st.caption('Actual YouTube visibility: '+draft.get('actual_privacy','unknown'))
@@ -100,7 +117,9 @@ def draft_panel(draft):
                 with st.spinner('Checking the platform…'):publisher.check(draft['id'])
                 st.rerun()
             except auth.SocialError as e:st.error(str(e))
-            except Exception:st.error('Could not check status. Your saved attempt is unchanged.')
+            except Exception:
+                log_exception('social_ui')
+                st.error('Could not check status. Your saved attempt is unchanged.')
     resumable=draft['platform']=='youtube' and draft['status'] in ('Uploading','Needs check')
     if draft['status'] in ('Draft','Ready') or resumable:
         with st.expander('Review before publishing',expanded=True):
@@ -122,7 +141,9 @@ def draft_panel(draft):
                         publisher.publish(draft['id'],lambda p,msg:progress.progress(min(1.,max(0.,p)),text=msg),expected_updated=draft['updated'])
                         st.rerun()
                     except (auth.SocialError,ValueError) as e:st.error(str(e))
-                    except Exception:st.error('Publishing could not start. Check account setup and the saved attempt.')
+                    except Exception:
+                        log_exception('social_ui')
+                        st.error('Publishing could not start. Check account setup and the saved attempt.')
 
 
 def platform_default_copy(platform,copy):
