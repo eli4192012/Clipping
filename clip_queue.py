@@ -170,7 +170,7 @@ def runner_alive(root):
     return False
 
 
-def ensure_runner(root):
+def ensure_runner(root, closed_lid=False):
     """Launch independently of the browser; concurrent launches safely elect one runner."""
     import subprocess
     import sys
@@ -182,7 +182,9 @@ def ensure_runner(root):
         store.set_enabled(False)
         return
     with (root/'work/clip-queue-runner.log').open('a') as log:
-        subprocess.Popen([sys.executable, str(Path(__file__).with_name('queue_runner.py')), '--root', str(root)],
+        command = [sys.executable, str(Path(__file__).with_name('queue_runner.py')), '--root', str(root)]
+        if closed_lid:command.append('--closed-lid')
+        subprocess.Popen(command,
                          cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
 
 

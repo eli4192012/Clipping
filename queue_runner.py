@@ -35,9 +35,8 @@ def process_item(store, item):
                            lambda exports: store.update(item['id'], exports=exports))
 
 
-def run(root, processor=process_item, poll=.5):
+def run(root, processor=process_item, poll=.5, closed_lid=False):
     from resource_limits import configure
-    from app_logging import log_exception, redact
     configure()
     root = Path(root).resolve()
     store = QueueStore(root)
@@ -49,35 +48,56 @@ def run(root, processor=process_item, poll=.5):
         except BlockingIOError:
             return
         store.recover()
-        while store.enabled():
-            with (root/'work/heavy-job.lock').open('a') as heavy:
-                while store.enabled():
-                    try:
-                        fcntl.flock(heavy, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        break
-                    except BlockingIOError:
-                        time.sleep(poll)
-                if not store.enabled():
-                    break
-                item = store.claim()
-                if item is None:
-                    break
-                # Model/FFmpeg children retain this lock if the coordinator is killed.
-                os.environ['CLIPPING_HEAVY_LOCK_FD'] = str(heavy.fileno())
-                try:
-                    processor(store, item)
-                except (InterruptedError, KeyboardInterrupt):
+        power = None
+        if closed_lid:
+            from queue_power import QueuePower
+            power = QueuePower(root)
+            try:power.start()
+            except (OSError,RuntimeError) as error:
+                from project_store import write
+                write(root/'work/queue-power.json',dict(phase='error',message=str(error),token=power.token))
+                power.stop();store.set_enabled(False);return
+        try:
+            process_queue(root, store, processor, poll, power)
+        finally:
+            if power is not None:power.stop()
+
+
+def process_queue(root, store, processor, poll, power=None):
+    from app_logging import log_exception, redact
+    from queue_power import status
+    while store.enabled():
+        with (root/'work/heavy-job.lock').open('a') as heavy:
+            while store.enabled():
+                if power is not None and status(root).get('phase') != 'active':
                     store.set_enabled(False)
-                    store.recover()
                     break
-                except Exception as error:
-                    log_exception('Queued video failed')
-                    store.finish(item['id'], redact(str(error)) or type(error).__name__)
-                else:
-                    store.finish(item['id'])
-                finally:
-                    os.environ.pop('CLIPPING_HEAVY_LOCK_FD', None)
-            # The heavy lock is released between videos, allowing manual jobs their turn.
+                try:
+                    fcntl.flock(heavy, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    time.sleep(poll)
+            if not store.enabled():
+                break
+            item = store.claim()
+            if item is None:
+                break
+            # Model/FFmpeg children retain this lock if the coordinator is killed.
+            os.environ['CLIPPING_HEAVY_LOCK_FD'] = str(heavy.fileno())
+            try:
+                processor(store, item)
+            except (InterruptedError, KeyboardInterrupt):
+                store.set_enabled(False)
+                store.recover()
+                break
+            except Exception as error:
+                log_exception('Queued video failed')
+                store.finish(item['id'], redact(str(error)) or type(error).__name__)
+            else:
+                store.finish(item['id'])
+            finally:
+                os.environ.pop('CLIPPING_HEAVY_LOCK_FD', None)
+        # Release the heavy lock between videos, allowing manual jobs their turn.
 
 
 def interrupted(signum, frame):
@@ -87,6 +107,7 @@ def interrupted(signum, frame):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parent)
+    parser.add_argument('--closed-lid', action='store_true')
     args = parser.parse_args()
     signal.signal(signal.SIGTERM, interrupted)
     # Temporary idle-sleep assertion, released automatically when this runner exits.
@@ -94,4 +115,4 @@ if __name__ == '__main__':
     if Path('/usr/bin/caffeinate').is_file():
         subprocess.Popen(['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())], stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    run(args.root)
+    run(args.root, closed_lid=args.closed_lid)

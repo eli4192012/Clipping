@@ -1,3 +1,10 @@
+# v5.32 · Optional closed-lid clipping with Amphetamine
+
+- Adds **Allow lid-closed processing with Amphetamine** before starting waiting queue videos. Requires the free Mac App Store utility and a connected charger. First-use macOS Automation and Amphetamine closed-display prompts must be completed before closing the lid.
+- Uses a temporary, screen-sleep-allowed session with a 24-hour limit. An independent local watcher ends the queue's session on completion, pause or runner exit, checks charger/mode availability, and lets remaining videos pause after the current video if support is lost. Existing active Amphetamine sessions are not replaced; differently timed replacement sessions are not ended.
+- Shows setup/active/error messages and rejects an unavailable charger before starting. Failed setup leaves videos waiting. A stale/dead watcher cannot keep reporting an active mode. Automatic app recovery uses normal lid-open processing until closed-lid mode is selected again.
+- Clipping makes no privileged helper, sudo or persistent power-setting changes. Transcription, selection, rendering and existing files remain local and unchanged. Automated behavior and script compilation are verified; physical lid-closed operation remains unverified on this Mac. See [validation](V532_VALIDATION.md).
+
 # v5.31 · A queue that keeps clipping while you step away
 
 - Adds **Video queue** in the sidebar, multi-project selection and **Add to video queue** in project setup. Each entry snapshots its source and clip settings. Start once to find and automatically export each video's selected clips before moving to the next video.

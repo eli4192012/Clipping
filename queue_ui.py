@@ -19,7 +19,7 @@ def show(root, go):
     st.markdown('<div class="eyebrow">WORK WHILE YOU STEP AWAY</div>', unsafe_allow_html=True)
     st.title('Video queue')
     st.write('Line up videos. We’ll find their clips and export them, one video at a time.')
-    st.caption('You can close the browser tab. The queue keeps this Mac from idle sleep while running; closing the lid or choosing Sleep still interrupts work. Reopening the app resumes an interrupted active queue using completed work.')
+    st.caption('You can close the browser tab. For lid-closed clipping, turn on the Amphetamine option below, keep your charger connected and leave the Mac on a hard surface with room for airflow. Normal queues prevent idle sleep; closing the lid can still interrupt them. Reopening the app resumes saved work with normal lid-open processing.')
     entries = library(root/'data')
     configured = {}
     for entry in entries:
@@ -54,6 +54,7 @@ def show(root, go):
 
 @st.fragment(run_every=2)
 def live_queue(root, go):
+    from queue_power import APP_STORE, capability, status
     store = QueueStore(root)
     items = store.items()
     waiting = [item for item in items if item['state']=='queued']
@@ -66,6 +67,22 @@ def live_queue(root, go):
     a.metric('Waiting videos', len(waiting))
     b.metric('Completed videos', sum(item['state']=='done' for item in items))
     c.metric('Needs attention', sum(item['state']=='failed' for item in items))
+    power = status(root)
+    if power.get('phase') == 'active':
+        st.success(power['message'])
+    elif power.get('phase') == 'starting' and alive:
+        st.info(power['message'])
+    elif power.get('phase') == 'error':
+        st.warning(power['message'])
+    closed_lid = False
+    ready = True
+    if not enabled and not current and waiting:
+        closed_lid = st.checkbox('Allow lid-closed processing with Amphetamine', key='queue-closed-lid')
+        if closed_lid:
+            ready, reason = capability()
+            st.caption(reason)
+            st.caption('Finish Amphetamine’s closed-display warning and any macOS Automation prompts before closing the lid. The session ends when the queue finishes or pauses, with a 24-hour limit. If you unplug the charger or end the session, remaining videos pause after the current one. End any existing Amphetamine session before starting this mode.')
+            st.link_button('Amphetamine · free in the Mac App Store', APP_STORE)
     if enabled:
         st.info('Processing the queue.' if current else 'Waiting for the current local job to finish.' if alive else 'Starting the queue…')
         if st.button('Pause after this video' if current else 'Pause queue', key='queue-pause'):
@@ -75,9 +92,12 @@ def live_queue(root, go):
         if st.button('Continue queue', key='queue-start'):
             store.set_enabled(True); ensure_runner(root); st.rerun()
     elif waiting:
-        st.info('Ready when you are. Start the queue to process these videos in order.')
-        if st.button('Start queue', key='queue-start', type='primary'):
-            store.set_enabled(True); ensure_runner(root); st.rerun()
+        st.info('Ready when you are. Start the queue to process these videos in order.' if ready else 'Connect your charger to start this queue with the lid closed.')
+        if st.button('Start queue', key='queue-start', type='primary', disabled=not ready):
+            store.set_enabled(True)
+            if closed_lid:ensure_runner(root, closed_lid=True)
+            else:ensure_runner(root)
+            st.rerun()
     else:
         st.info('No videos waiting. Add saved videos above, or add a video from project setup.')
     if current:

@@ -57,5 +57,18 @@ class QueueUITests(unittest.TestCase):
             next(b for b in app.button if b.label=='Video queue').click().run()
             self.assertEqual(app.session_state['page'],'queue');show.assert_called_once()
 
+    def test_closed_lid_requires_charger_and_passes_opt_in_to_runner(self):
+        self.store.add(self.projects[0],SETTINGS)
+        with patch('queue_power.capability',return_value=(False,'Connect your charger.')):
+            app=self.app.run()
+            next(c for c in app.checkbox if c.key=='queue-closed-lid').check().run()
+            self.assertTrue(next(b for b in app.button if b.label=='Start queue').disabled)
+            self.assertFalse(self.store.enabled())
+        with patch('queue_power.capability',return_value=(True,'Ready.')):
+            app.run()
+            next(b for b in app.button if b.label=='Start queue').click().run()
+            self.launch.assert_any_call(self.root,closed_lid=True)
+            self.assertTrue(self.store.enabled())
+
 
 if __name__=='__main__':unittest.main()
