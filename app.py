@@ -10,6 +10,10 @@ from engine import ROOT,SPEECH,EDITOR,duration,export_clip
 from interview import interview_content
 from vision_sports import VISION,football_hint
 from modes import PROFILES
+import youtube_import
+if getattr(youtube_import,'YOUTUBE_IMPORT_API',0)<2:
+    import importlib
+    importlib.reload(youtube_import)
 from youtube_import import lookup,download,normalize_url
 import jobs,audience_quality
 if getattr(jobs,'CURATION_API',0)<2 or getattr(audience_quality,'CURATION_API',0)<1:
@@ -48,11 +52,17 @@ with st.container(key='release-header'):
     if version_button.button(release,help='Open the release report',use_container_width=True):release_report()
 st.session_state.setdefault('page','library')
 page=st.session_state.page
+import clip_queue
+if getattr(clip_queue,'QUEUE_API',0)<2:
+    import importlib
+    importlib.reload(clip_queue)
 from clip_queue import resume_enabled_queue
 resume_enabled_queue(ROOT)
+from channel_watch import ensure_watcher
+ensure_watcher(ROOT)
 stages=['source','settings','processing','complete','results','editor']
 active=0 if page=='source' else 1 if page=='settings' else 2 if page=='processing' else 3
-if page not in ('library','source','accounts','social_history','combine','examples','before_after','queue'):
+if page not in ('library','source','accounts','social_history','combine','examples','before_after','queue','channels'):
     st.markdown('<nav class="steps" aria-label="Project progress">'+ '<span class="step-connector" aria-hidden="true">—</span>'.join(f'<span class="step {"active" if i==active else "done" if i<active else ""}" '+('aria-current="step"' if i==active else '')+f'><span class="step-number">{"✓" if i<active else f"{i+1:02}"}</span>{name}</span>' for i,name in enumerate(['Add video','Make it yours','Find moments','Review clips']))+'</nav>',unsafe_allow_html=True)
 
 
@@ -77,6 +87,7 @@ with st.sidebar:
     if page!='processing' and st.button('My projects',icon=':material/home:',use_container_width=True,type='primary' if page=='library' else 'secondary'):go('library')
     if page!='processing' and st.button('＋ New project',icon=':material/add_circle:',use_container_width=True,type='primary' if page=='source' else 'secondary'):go('source')
     if page!='processing' and st.button('Video queue',icon=':material/queue_play_next:',use_container_width=True,type='primary' if page=='queue' else 'secondary'):go('queue')
+    if page!='processing' and st.button('YouTube channels',icon=':material/subscriptions:',use_container_width=True,type='primary' if page=='channels' else 'secondary'):go('channels')
     if page!='processing' and st.button('Combine clips',icon=':material/playlist_add:',use_container_width=True,type='primary' if page=='combine' else 'secondary'):go('combine')
     if page!='processing' and st.button('Example library',icon=':material/bookmarks:',use_container_width=True,type='primary' if page=='examples' else 'secondary'):go('examples')
     if page!='processing' and st.button('Before & after',icon=':material/compare:',use_container_width=True,type='primary' if page=='before_after' else 'secondary'):go('before_after')
@@ -89,7 +100,20 @@ with st.sidebar:
         st.caption('Missing a model? Run Download Models.command in the Clipping folder.')
     st.markdown('<div class="studio-note"><strong><span class="local-dot"></span>Local by default.</strong><br>Only clips you choose to publish leave this Mac.</div>',unsafe_allow_html=True)
 
+if page=='channels':
+    import channel_watch_ui
+    if getattr(channel_watch_ui,'CHANNEL_FORM_API',0)<2:
+        import importlib
+        importlib.reload(channel_watch_ui)
+    from channel_watch_ui import show as show_channels
+    show_channels(ROOT,go)
+    st.stop()
+
 if page=='queue':
+    import queue_ui
+    if getattr(queue_ui,'QUEUE_FORM_API',0)<2:
+        import importlib
+        importlib.reload(queue_ui)
     from queue_ui import show as show_queue
     show_queue(ROOT,go)
     st.stop()

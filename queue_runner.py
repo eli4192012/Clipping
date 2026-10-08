@@ -6,18 +6,25 @@ import signal
 import time
 from pathlib import Path
 
-from clip_queue import QueueStore
+from clip_queue import QueueStore, SourceSkipped
 
 
 def process_item(store, item):
     from jobs import analyze, estimate_seconds
     from queue_exports import export_suggestions
+    if item.get('remote'):
+        if item['project']['source']:
+            prior = Path(item['project']['source']).stat()
+            if [prior.st_size,prior.st_mtime_ns] != item['source_state']:
+                raise ValueError('The source video changed after it was imported. Restore it before retrying.')
+        from youtube_channels import prepare_item
+        item = prepare_item(store,item)
     source = Path(item['project']['source'])
     stat = source.stat()
     if [stat.st_size, stat.st_mtime_ns] != item['source_state']:
         raise ValueError('The source video changed after it was queued. Add the updated project again.')
-    scale = .75 if item['export_clips'] else 1.
-    last = -1.
+    base = .08 if item.get('remote') else 0.
+    last = base
 
     def progress(fraction, label):
         nonlocal last
@@ -25,9 +32,22 @@ def process_item(store, item):
         last = fraction
         store.update(item['id'], progress=fraction, label=label)
 
+    if item.get('remote') and item['settings'].get('watch_auto_type'):
+        from jobs import get_transcript
+        from video_type import detect
+        from youtube_channels import automatic_settings
+        transcript = get_transcript(item['project'],item['settings'],lambda p,label:progress(.08+.34*p,label))
+        progress(.42,'Speech saved; choosing the clip mode')
+        detected = detect(item['project'],lambda p,label:progress(.42+.02*p,label),transcript=transcript)
+        item = store.configured(item['id'],automatic_settings(item['settings'],detected))
+        base = .44
+        progress(base,'Using '+item['settings']['mode']+' mode · '+detected['confidence']+' confidence')
+    analysis_end = .75 if item['export_clips'] else 1.
+    scale = analysis_end-base
+
     # Estimates apply to the actual analysis phase, not the time waiting for its turn.
     store.update(item['id'], estimate=estimate_seconds(item['project'], item['settings']))
-    result = analyze(item['project'], item['settings'], lambda p, label: progress(scale*p, label))
+    result = analyze(item['project'], item['settings'], lambda p, label: progress(base+scale*p, label))
     store.update(item['id'], result=result)
     if item['export_clips']:
         export_suggestions(item['project'], item['settings'], result,
@@ -90,6 +110,8 @@ def process_queue(root, store, processor, poll, power=None):
                 store.set_enabled(False)
                 store.recover()
                 break
+            except SourceSkipped as error:
+                store.skip(item['id'],str(error))
             except Exception as error:
                 log_exception('Queued video failed')
                 store.finish(item['id'], redact(str(error)) or type(error).__name__)

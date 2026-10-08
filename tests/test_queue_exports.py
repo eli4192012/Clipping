@@ -102,5 +102,42 @@ class QueueExportTests(unittest.TestCase):
         self.assertEqual(before,(self.source.read_bytes(),self.transcript.read_bytes(),self.result.read_bytes()))
         self.assertFalse(store.enabled())
 
+    def test_channel_discovery_to_serial_import_cached_analysis_and_real_captioned_export(self):
+        from channel_watch import WatchStore,tick
+        import time,fcntl
+        cid='UC'+'a'*22;identity='vid00000001'
+        new_folder=self.root/'data'/('youtube-'+identity)
+        self.folder.rename(new_folder)
+        self.folder=new_folder;self.source=new_folder/self.source.name
+        self.transcript=new_folder/self.transcript.name;self.result=new_folder/self.result.name
+        self.project.update(folder=str(new_folder),source=str(self.source))
+        metadata=dict(id=identity,url='https://www.youtube.com/watch?v='+identity,title='Finished channel fixture',
+                      channel_id=cid,channel='Fixture channel',duration=4,published=time.time()-10)
+        channel=dict(id=cid,name='Fixture channel',url='https://www.youtube.com/channel/'+cid+'/videos',entries=[metadata])
+        watch=WatchStore(self.root);watch.connect(channel,SETTINGS)
+        tick(watch,discovery=lambda url:channel,inspector=lambda url:metadata,launch=lambda root:None)
+        store=QueueStore(self.root);item=store.items()[0]
+        self.assertEqual(item['project']['source'],'')
+        before=(self.source.read_bytes(),self.transcript.read_bytes(),self.result.read_bytes())
+        def imported(*args,**kwargs):
+            with (self.root/'work/heavy-job.lock').open('a') as lock:
+                with self.assertRaises(BlockingIOError):fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            return self.source,self.folder
+        with (patch('youtube_import.lookup',return_value=metadata),patch('youtube_import.download',side_effect=imported),
+              patch('engine.ROOT',self.root),patch('jobs.get_transcript',side_effect=AssertionError('Retranscribed saved work')),
+              patch('jobs.worker',side_effect=AssertionError('Unexpected model work'))):
+            run(self.root)
+        saved=store.get(item['id']);self.assertEqual(saved['state'],'done',saved['error'])
+        self.assertEqual(len(saved['exports']),1)
+        output=saved['exports'][0]
+        with av.open(output['video']) as media:
+            self.assertAlmostEqual(media.duration/av.time_base,2,delta=.08)
+            self.assertTrue(media.streams.audio)
+        self.assertIn('A complete',Path(output['captions']).read_text())
+        self.assertEqual(before,(self.source.read_bytes(),self.transcript.read_bytes(),self.result.read_bytes()))
+        watch.request_check(cid)
+        tick(watch,discovery=lambda url:channel,inspector=lambda url:metadata,launch=lambda root:None)
+        self.assertEqual(len(store.items()),1)
+
 
 if __name__=='__main__':unittest.main()

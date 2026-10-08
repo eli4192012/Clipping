@@ -7,6 +7,11 @@ from urllib.parse import urlparse, parse_qs
 import imageio_ffmpeg
 from yt_dlp import YoutubeDL
 from engine import ROOT, duration
+YOUTUBE_IMPORT_API = 2
+
+
+class UnfinishedVideo(ValueError):
+    pass
 
 
 def normalize_url(value):
@@ -55,15 +60,17 @@ def lookup(value):
     url, video_id = normalize_url(value)
     with YoutubeDL(options()) as downloader:
         info = downloader.extract_info(url, download=False)
-    if not info or info.get('is_live') or info.get('live_status') == 'is_upcoming':
-        raise ValueError('Use a finished video. Live and upcoming streams are not supported.')
+    if not info or info.get('is_live') or info.get('live_status') in ('is_live', 'is_upcoming', 'post_live'):
+        raise UnfinishedVideo('Use a finished video. Live and upcoming streams are not supported.')
     return {'id': video_id, 'url': url, 'title': info.get('title') or video_id,
-            'channel': info.get('uploader') or '', 'duration': info.get('duration') or 0}
+            'channel': info.get('uploader') or '', 'channel_id': info.get('channel_id') or '',
+            'published': info.get('release_timestamp') or info.get('timestamp'),
+            'duration': info.get('duration') or 0}
 
 
-def download(metadata, progress=lambda message: None):
+def download(metadata, progress=lambda message: None, root=None):
     url, video_id = normalize_url(metadata['url'])
-    folder = ROOT / 'data' / ('youtube-' + video_id)
+    folder = Path(root or ROOT) / 'data' / ('youtube-' + video_id)
     folder.mkdir(parents=True, exist_ok=True)
     manifest = folder / 'import.json'
     if manifest.exists():

@@ -1,3 +1,11 @@
+# v5.35 · Connect channels for automatic clipping
+
+- Adds **YouTube channels** in the sidebar: connect a public channel or @handle and start watching without a Google sign-in or API key. Defaults to the Colts channel, vertical clips with captions and Automatic per upload. It reuses the full transcript and existing local detector to choose Interview, Podcast or Sports; fixed or saved settings are also available. Detection still needs review.
+- Checks about every five minutes and queues regular uploads from the last **48 hours**, plus the newest finished upload if older. Reads the latest 50 uploads from the Videos tab; skips Shorts/live tabs and unfinished videos. Full video metadata supplies the publication time. Queued sources are checked again before download so old videos can be skipped.
+- Uses the existing serial queue for download, local transcription, AI cuts and exports. Saved video IDs prevent repeated jobs after completion, failure, removal or restart. Frozen settings, retained caches, retry controls, history and visible errors make unattended work reviewable.
+- Adds **Pause watching**, **Resume watching**, **Check now** and actual upload/queue status. New uploads respect a paused queue; a naturally emptied queue restarts for new arrivals. Watches survive browser closure and resume when the app is reopened after a shutdown. The Mac must remain powered on, awake and online; normal watching does not bypass lid sleep.
+- Nothing is published automatically. Local AI/editor rules, model weights and the analysis-cache VERSION are unchanged. See [validation](V535_VALIDATION.md).
+
 # v5.34 · Your preferred title tags and clip-title references
 
 - New AI titles always include **#fyp**. Colts titles reserve **#Colts #NFL #Football #fyp**, using speech or saved source title/publisher context. Supported player/topic tags can be added when they fit the 100-character title limit; mandatory tags are never silently dropped.

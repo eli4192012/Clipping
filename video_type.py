@@ -22,21 +22,23 @@ def classify(title,sentences,face_fraction=0):
     return dict(mode='Podcast',confidence='Moderate' if len(text.split())>=80 and face_fraction>=.4 else 'Low',reason='No clear interview exchange or sports-action pattern was found. Podcast mode is the general speech/story fallback; override it for other footage.')
 
 
-def detect(project,progress=lambda p,t:None):
+def detect(project,progress=lambda p,t:None,transcript=None):
     source=Path(project['source']);folder=Path(project['folder'])
-    key=hashlib.sha256(json.dumps([str(source),source.stat().st_size,source.stat().st_mtime_ns,project['title'],'categories-v1']).encode()).hexdigest()[:16]
+    identity=[str(source),source.stat().st_size,source.stat().st_mtime_ns,project['title'],'categories-v1']
+    if transcript is not None:identity+=['full-transcript',transcript.get('sentences',[])]
+    key=hashlib.sha256(json.dumps(identity).encode()).hexdigest()[:16]
     cache=folder/('video-type-'+key+'.json')
     if cache.exists():return json.loads(cache.read_text())
     progress(.05,'Checking the video type')
-    sentences=[];basis='sampled speech'
-    for p in sorted(folder.glob('transcript*.json'),key=lambda p:p.stat().st_mtime_ns,reverse=True):
+    sentences=transcript.get('sentences',[]) if transcript is not None else [];basis='saved transcript' if transcript is not None else 'sampled speech'
+    for p in ([] if transcript is not None else sorted(folder.glob('transcript*.json'),key=lambda p:p.stat().st_mtime_ns,reverse=True)):
         try:
             data=json.loads(p.read_text())
             if isinstance(data,dict) and 'sentences' in data:
                 sentences=data['sentences'];basis='saved transcript';break
         except (ValueError,OSError):continue
     notes=[]
-    if not sentences:
+    if not sentences and transcript is None:
         import av,imageio_ffmpeg
         from engine import transcribe,speech_model
         with av.open(str(source)) as v:has_audio=bool(v.streams.audio)

@@ -5,6 +5,7 @@ import streamlit as st
 from clip_queue import QueueStore, ensure_runner, runner_alive
 from project_store import library, read
 from ui_jobs import clock
+QUEUE_FORM_API = 2
 
 
 def add_project(root, project, settings, export_clips=True):
@@ -113,7 +114,8 @@ def live_queue(root, go):
         with st.container(border=True):
             st.write(f"{index+1}. {item['project']['title']}")
             settings = item['settings']
-            st.caption(f"{settings['mode']} · {settings.get('quality','Balanced')} · {settings['minimum']}–{settings['maximum']} seconds · "+('Find and export clips' if item['export_clips'] else 'Find clips'))
+            mode = 'Automatic' if settings.get('watch_auto_type') else settings['mode']
+            st.caption(f"{mode} · {settings.get('quality','Balanced')} · {settings['minimum']}–{settings['maximum']} seconds · "+('Find and export clips' if item['export_clips'] else 'Find clips'))
             up, down, remove = st.columns(3)
             if up.button('Move up', key='queue-up-'+item['id'], disabled=index==0):
                 store.move(item['id'], -1); st.rerun()
@@ -121,13 +123,15 @@ def live_queue(root, go):
                 store.move(item['id'], 1); st.rerun()
             if remove.button('Remove from queue', key='queue-remove-'+item['id']):
                 store.remove(item['id']); st.rerun()
-    history = [item for item in items if item['state'] in ('done','failed')]
+    history = [item for item in items if item['state'] in ('done','failed','skipped')]
     if history:
         st.subheader('Finished and needs attention')
         for item in reversed(history):
             with st.container(border=True):
                 st.write(item['project']['title'])
-                if item['state']=='failed':
+                if item['state']=='skipped':
+                    st.info('Skipped · '+item['error'])
+                elif item['state']=='failed':
                     st.error('Needs attention · '+item['error'])
                     if st.button('Retry this video', key='queue-retry-'+item['id']):
                         try:
