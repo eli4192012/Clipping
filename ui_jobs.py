@@ -20,14 +20,16 @@ def run_job(key,work,estimate):
     if state_key not in st.session_state:
         events=queue.Queue();executor=ThreadPoolExecutor(max_workers=1)
         def guarded():
-            from resource_limits import HEAVY_JOB_LOCK
+            from resource_limits import HEAVY_JOB_LOCK,HEAVY_JOB_FD
             import fcntl
             from engine import ROOT
             events.put((0.,'Waiting for the other local job to finish'))
             with HEAVY_JOB_LOCK:
                 with (ROOT/'work/heavy-job.lock').open('a') as lock:
                     fcntl.flock(lock,fcntl.LOCK_EX)
-                    return work(lambda p,label:events.put((p,label)))
+                    token=HEAVY_JOB_FD.set(lock.fileno())
+                    try:return work(lambda p,label:events.put((p,label)))
+                    finally:HEAVY_JOB_FD.reset(token)
         future=executor.submit(guarded)
         st.session_state[state_key]={'future':future,'events':events,'executor':executor,'start':time.monotonic(),'p':0.,'label':'Starting','estimate':estimate}
     job=st.session_state[state_key]

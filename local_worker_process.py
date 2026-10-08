@@ -4,10 +4,13 @@ from app_logging import log_exception, log_worker_failure, redact
 from ffmpeg_export import stop_process
 
 def run_local(command,request,result,env,timeout,progress=None):
+    from resource_limits import inherited_lock_fds
+    inherited=inherited_lock_fds()
+    if inherited:env=dict(env,CLIPPING_HEAVY_LOCK_FD=str(inherited[0]))
     status=request.with_name('progress.json')
     data=json.loads(request.read_text());data['progress']=str(status);request.write_text(json.dumps(data))
     with request.with_name('stdout.log').open('w+') as out,request.with_name('stderr.log').open('w+') as err:
-        process=subprocess.Popen(command,stdout=out,stderr=err,env=env,start_new_session=True)
+        process=subprocess.Popen(command,stdout=out,stderr=err,env=env,start_new_session=True,pass_fds=inherited)
         begun=time.monotonic();last=None
         try:
             while True:

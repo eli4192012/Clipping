@@ -1,3 +1,11 @@
+# v5.31 · A queue that keeps clipping while you step away
+
+- Adds **Video queue** in the sidebar, multi-project selection and **Add to video queue** in project setup. Each entry snapshots its source and clip settings. Start once to find and automatically export each video's selected clips before moving to the next video.
+- Adds waiting-item reorder/removal, pause after the current video, live stage progress, finished results and retry controls. Duplicate active entries are skipped; failures keep completed files and let the next video continue. Queued projects cannot be deleted until removed or finished.
+- Runs in a separate local process with a saved SQLite queue, exclusive runner election and the existing heavy-job lock. Browser navigation/closure does not stop work. Reopening the app resumes interrupted active work; paused queues stay paused. Model/FFmpeg children inherit the heavy-job lock so recovery cannot overlap a surviving worker.
+- Exports suggestions with default studio captions/framing, uses saved caption corrections, indexes finished clips for Combine clips and shares existing editor render keys. Successful exports are reused on retry and when opened. Prior manual edits, source videos, transcripts, analyses and exports remain saved; nothing is published automatically.
+- Holds a temporary macOS idle-sleep assertion only while the runner is alive. Closing the lid, manual sleep or shutdown can still interrupt processing. Analysis timing remains an estimate; export time is additional. The analysis-cache version and editorial selection rules are unchanged. See [validation](V531_VALIDATION.md).
+
 # v5.30 · Clips that keep a complete idea
 
 - Changes Balanced selection from “the shortest explanation” to the subject, useful explanation and conclusion. Uses your preferred duration as a target while allowing genuinely brief complete ideas. Keeps the question when needed and retains the one-question interview limit.

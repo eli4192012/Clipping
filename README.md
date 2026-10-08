@@ -42,7 +42,17 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.30**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.31**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+
+## Line up videos to process while you are away
+
+Choose **Video queue** in the sidebar. Select multiple imported projects under **Add saved videos**, then click **Add videos to queue** and **Start queue**. New imports can be added with **Add to video queue** on project setup, after choosing their clip settings. Each queue entry saves those settings; changing a project's preferences later does not change its waiting entry.
+
+The app finds clips and exports every selected suggestion before starting the next video. Automatic export is enabled by default; the saved-video form can also queue analysis only. Exports use the default look, captions (including saved corrections) and framing. Previous manual edits remain available. Open finished results to review, adjust and download the clips; finished exports also appear in Combine clips. Nothing is posted automatically.
+
+Move waiting videos up/down, remove them without deleting their projects, or **Pause after this video**. A failed video is marked **Needs attention** and the next video continues. **Retry this video** reuses successful analysis and render caches. Identical active entries are not added twice. Removing/changing a source file after adding it causes a recoverable error rather than silently processing different media.
+
+The queue is saved in local SQLite and runs in a separate Python process. Closing a browser tab or changing app pages does not stop it. On this Mac it holds a temporary idle-sleep assertion while processing; closing the lid, choosing Sleep, shutting down or losing power still interrupts processing. Reopening the app resumes an interrupted active queue from saved work. Paused queues remain paused. Large-model work and exports share the existing single-job lock, including inherited locks in child processes after a runner failure. Progress reflects actual analysis/export stages; analysis time is an estimate and export time is additional. See [queue validation](V531_VALIDATION.md).
 
 Saved videos can be reopened from the start screen. Settings and previous results are kept locally. Initial processing estimates use video length and selected review options; later estimates use this video's previous measured processing time. Percentages represent processing milestones, not a promise of constant speed.
 

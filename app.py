@@ -48,9 +48,11 @@ with st.container(key='release-header'):
     if version_button.button(release,help='Open the release report',use_container_width=True):release_report()
 st.session_state.setdefault('page','library')
 page=st.session_state.page
+from clip_queue import resume_enabled_queue
+resume_enabled_queue(ROOT)
 stages=['source','settings','processing','complete','results','editor']
 active=0 if page=='source' else 1 if page=='settings' else 2 if page=='processing' else 3
-if page not in ('library','source','accounts','social_history','combine','examples','before_after'):
+if page not in ('library','source','accounts','social_history','combine','examples','before_after','queue'):
     st.markdown('<nav class="steps" aria-label="Project progress">'+ '<span class="step-connector" aria-hidden="true">—</span>'.join(f'<span class="step {"active" if i==active else "done" if i<active else ""}" '+('aria-current="step"' if i==active else '')+f'><span class="step-number">{"✓" if i<active else f"{i+1:02}"}</span>{name}</span>' for i,name in enumerate(['Add video','Make it yours','Find moments','Review clips']))+'</nav>',unsafe_allow_html=True)
 
 
@@ -74,6 +76,7 @@ with st.sidebar:
     st.markdown('<div class="eyebrow">WORKSPACE</div>',unsafe_allow_html=True)
     if page!='processing' and st.button('My projects',icon=':material/home:',use_container_width=True,type='primary' if page=='library' else 'secondary'):go('library')
     if page!='processing' and st.button('＋ New project',icon=':material/add_circle:',use_container_width=True,type='primary' if page=='source' else 'secondary'):go('source')
+    if page!='processing' and st.button('Video queue',icon=':material/queue_play_next:',use_container_width=True,type='primary' if page=='queue' else 'secondary'):go('queue')
     if page!='processing' and st.button('Combine clips',icon=':material/playlist_add:',use_container_width=True,type='primary' if page=='combine' else 'secondary'):go('combine')
     if page!='processing' and st.button('Example library',icon=':material/bookmarks:',use_container_width=True,type='primary' if page=='examples' else 'secondary'):go('examples')
     if page!='processing' and st.button('Before & after',icon=':material/compare:',use_container_width=True,type='primary' if page=='before_after' else 'secondary'):go('before_after')
@@ -85,6 +88,11 @@ with st.sidebar:
             st.write(f"{'✓' if ready else '○'} {name}")
         st.caption('Missing a model? Run Download Models.command in the Clipping folder.')
     st.markdown('<div class="studio-note"><strong><span class="local-dot"></span>Local by default.</strong><br>Only clips you choose to publish leave this Mac.</div>',unsafe_allow_html=True)
+
+if page=='queue':
+    from queue_ui import show as show_queue
+    show_queue(ROOT,go)
+    st.stop()
 
 if page=='examples':
     from example_library_ui import show as show_examples
@@ -304,6 +312,12 @@ if page=='settings':
     if a.button('← Change video'):go('source')
     if b.button('Find my clips →',type='primary',disabled=not ready):
         st.session_state.settings=settings;(folder/'ui-settings.json').write_text(json.dumps(settings));go('processing')
+    if st.button('Add to video queue',disabled=not ready):
+        from queue_ui import add_project
+        try:
+            add_project(ROOT,project,settings,export_clips=True)
+        except (OSError,ValueError) as error:st.error(str(error))
+        else:go('queue')
     if mode=='Interview' and st.button('Compare the same moment'):
         st.session_state.settings=settings;go('compare')
     existing=analysis_path(project,settings)
@@ -513,9 +527,8 @@ if page=='editor':
     from presentation import LAYOUTS,normalize_layout,default_layout
     from project_store import read,write
     style_path=path.with_suffix('.styles.json');styles=read(style_path,{})
-    style=styles.get(edit_id,dict(layout=default_layout(settings.get('portrait',False)),burn=True,position=.5,second=.75,
-        pacing='Off' if settings['mode']=='Sports' else 'Subtle',conversation='Off' if settings['mode']=='Sports' else 'Automatic',
-        semantic_emphasis=True,emphasis_style='Bold',packaging_version=1))
+    from queue_exports import default_style,render_identity
+    style=styles.get(edit_id,default_style(settings))
     if settings['mode']=='Interview' and not active_plan and style.get('title')==original_title:style=dict(style,title=candidate['title'])
     style=dict(style,layout=normalize_layout(style['layout']))
     with edit_tab:
@@ -578,9 +591,7 @@ if page=='editor':
                 log_exception('app')
                 with look_tab:st.warning('Automatic camera planning was unavailable; using full picture. '+str(error))
                 render_style['layout']=LAYOUTS[1]
-    render_signature=[digest,source.stat().st_mtime_ns,transcript_path.stat().st_mtime_ns,render_start,render_end,render_style,export_words]
-    render_signature+=([final_ranges,package['fingerprint'],'v517'] if style.get('packaging_version') else ([render_ranges,'v516'] if render_ranges else ['v55']))
-    render_id=hashlib.sha256(json.dumps(render_signature).encode()).hexdigest()[:24]
+    render_id=render_identity(folder,source,transcript_path,render_start,render_end,render_style,export_words,final_ranges,package,render_ranges)
     manifest=folder/f'render-{render_id}.json';video=None;download_area=None
     try:
         saved=read(manifest,[])

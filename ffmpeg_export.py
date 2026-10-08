@@ -41,6 +41,7 @@ def run_ffmpeg(command, duration, report=lambda seconds: None, timeout=None):
     Selectable stdout never blocks the deadline. File-backed stderr cannot fill
     an unread pipe, and only its tail is read into memory on failure.
     """
+    from resource_limits import inherited_lock_fds
     limit = export_timeout(duration) if timeout is None else float(timeout)
     if not math.isfinite(limit) or limit <= 0:
         raise ValueError('Choose a finite positive export time limit.')
@@ -49,7 +50,7 @@ def run_ffmpeg(command, duration, report=lambda seconds: None, timeout=None):
         try:
             begun = time.monotonic()
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors,
-                                       start_new_session=True)
+                                       start_new_session=True, pass_fds=inherited_lock_fds())
             events.register(process.stdout, selectors.EVENT_READ)
             pending, last = b'', -1.
             while True:
