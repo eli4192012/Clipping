@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from project_store import read, write
 
-POST_FORM_API=5
+POST_FORM_API=6
 OPENING_HOOK_API=1
 
 
@@ -60,7 +60,7 @@ def look_form(style,package,words,mode,identity,ranged=False):
 def post_form(folder,package,settings=None,active=False):
     import streamlit as st
     import social_copy
-    if social_copy.VERSION!='social-copy-5':
+    if social_copy.VERSION!='social-copy-6':
         import importlib
         importlib.reload(social_copy)
     from social_copy import VERSION,inline_title,inline_caption,get_copy,identity,refresh_fields,posting_error
@@ -80,15 +80,20 @@ def post_form(folder,package,settings=None,active=False):
     if 'YouTube Shorts' not in stored:posts['YouTube Shorts']=dict(title='',description='',hashtags=[])
     elif stored['YouTube Shorts'].get('copy_origin')!='manual' and stored['YouTube Shorts'].get('description')==default.get('description'):
         posts['YouTube Shorts']=dict(stored['YouTube Shorts'],description='')
-    ai_key,model=identity(package,settings)
+    from posting_style import for_clip
+    reference=for_clip(folder,package)
+    ai_key,model=identity(package,settings,reference)
     refresh=refresh_fields(stored.get('YouTube Shorts'),default,ai_key)
     attempt_key='auto-social-copy-'+ai_key
     st.caption('AI writes a hook title and a natural description when you open Social media. Review the text, try another title idea, or edit it yourself.')
-    from posting_style import context
-    reference=context(package['final_transcript'])
-    if reference:
+    if reference.get('channel'):
         count=len(reference['examples'])
         st.caption(f"{reference['channel']} writing style · {reference['total_posts']} posts saved · {count} relevant example{'s' if count!=1 else ''} for this clip")
+        if reference.get('saved_clip_titles'):
+            st.caption(f"Also uses {reference['saved_clip_titles']} saved clip titles as style references.")
+        if reference.get('approved_title_rewrites'):
+            st.caption('Includes your approved title rewrite for this topic.')
+    st.caption('New AI titles always include #fyp. Colts titles also include #Colts #NFL #Football.')
     for platform in ('YouTube Shorts','TikTok','Instagram Reels'):
         post=posts.get(platform,package['posting'][platform])
         with st.expander(platform+' posting package',expanded=platform=='YouTube Shorts'):

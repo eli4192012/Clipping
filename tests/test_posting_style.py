@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from posting_style import build_profile,context,import_corpus,load,suggested_tags,supported_tag
+from posting_style import build_profile,context,for_clip,import_corpus,load,required_tags,saved_clip_titles,suggested_tags,supported_tag
 from social_copy import attach_evidence,evidence_phrases,generate_local,get_copy,hashtag_choices,identity,normalize
 
 
@@ -23,6 +23,10 @@ def corpus():
 
 
 class PostingStyleTests(unittest.TestCase):
+    def setUp(self):
+        patcher=patch('posting_style.saved_clip_titles',return_value=[])
+        patcher.start();self.addCleanup(patcher.stop)
+
     def test_import_preserves_all_originals_and_excludes_bad_references(self):
         original=corpus();before=copy.deepcopy(original)
         with tempfile.TemporaryDirectory() as tmp:
@@ -33,7 +37,7 @@ class PostingStyleTests(unittest.TestCase):
             self.assertEqual(json.loads(saved),before)
             self.assertEqual(profile['total_posts'],8)
             self.assertEqual([e['id'] for e in profile['examples']],[1,2,3])
-            self.assertNotIn('fyp',profile['hashtag_counts'])
+            self.assertIn('fyp',profile['hashtag_counts'])
             self.assertEqual(load(path),profile)
             import_corpus(original,path)
             self.assertEqual(archive.read_bytes(),saved)
@@ -69,12 +73,81 @@ class PostingStyleTests(unittest.TestCase):
         style=context('Colts use two hands on the ball in the pocket.',build_profile(corpus()))
         tags=suggested_tags('Colts use two hands on the ball in the pocket.',style)
         self.assertIn('#Colts',tags);self.assertIn('#BallSecurity',tags)
-        for tag in ('#NFL','#JonathanTaylor','#fyp','#fpy','#Pushed'):
+        self.assertIn('#fyp',tags)
+        for tag in ('#NFL','#JonathanTaylor','#fpy','#Pushed'):
             self.assertNotIn(tag,tags)
         self.assertFalse(supported_tag('#Win','A winner came through.'))
         self.assertFalse(supported_tag('#SpencerSchrader','Spencer Shrader made the kick.'))
         self.assertTrue(supported_tag('#JonathanTaylor','Jonathan Taylor made a play.'))
         self.assertNotIn('#Different',hashtag_choices('Different players get pushed forward.'))
+
+    def test_required_tags_follow_creator_rule_without_turning_every_topic_into_football(self):
+        self.assertEqual(required_tags('A sourdough starter needs flour.'),['#fyp'])
+        self.assertEqual(required_tags('Colts use two hands on the ball.'),['#Colts','#NFL','#Football','#fyp'])
+        self.assertEqual(required_tags('NFL pass protection matters.'),['#NFL','#Football','#fyp'])
+        self.assertEqual(required_tags('College football is back.'),['#Football','#fyp'])
+        self.assertEqual(required_tags('Two different pass rushers.',dict(source_context=dict(channel='Indianapolis Colts'))),['#Colts','#NFL','#Football','#fyp'])
+
+    def test_title_reserves_default_tags_deduplicates_and_never_cuts_off_headline(self):
+        text='Buck and Tommy rush inside for the Colts.'
+        raw=dict(title='How Buck and Tommy Work Together on the Interior Pass Rush',description='Their different rushing styles complement each other inside.',
+                 hashtags=['#FYP','#Buck','#Tommy','#Colts','#NFL','#Football'],evidence_quotes=['Buck and Tommy rush inside'])
+        title=normalize(raw,text)['title']
+        self.assertIn('#Colts #NFL #Football',title)
+        self.assertTrue(title.endswith('#fyp'));self.assertEqual(title.casefold().count('#fyp'),1)
+        self.assertLessEqual(len(title),100)
+        boundary=normalize(dict(raw,title='H'*73,hashtags=[]),text)['title']
+        self.assertEqual(len(boundary),100)
+        with self.assertRaisesRegex(ValueError,'Shorten the headline'):
+            normalize(dict(raw,title='H'*74,hashtags=[]),text)
+
+    def test_project_metadata_supplies_only_category_tags_and_does_not_modify_project(self):
+        with tempfile.TemporaryDirectory() as tmp,patch('posting_style.load',return_value=build_profile(corpus())):
+            path=Path(tmp)/'project.json';path.write_text(json.dumps(dict(title='Colts pass rush interview',channel='Indianapolis Colts')))
+            original=path.read_bytes();package=dict(fingerprint='clip',final_transcript='Buck and Tommy rush inside.')
+            style=for_clip(tmp,package)
+            self.assertEqual(required_tags(package['final_transcript'],style),['#Colts','#NFL','#Football','#fyp'])
+            self.assertEqual(path.read_bytes(),original)
+            raw=dict(title='Buck and Tommy rush inside',description='Two rushers work together along the interior.',hashtags=[],evidence_quotes=['Buck and Tommy rush inside.'])
+            result=normalize(raw,package['final_transcript'],style)
+            self.assertTrue(result['title'].endswith('#Colts #NFL #Football #fyp'))
+            path.write_text(json.dumps(dict(title='Lou discusses two pass rushers')))
+            imported=Path(tmp)/'import.json';imported.write_text(json.dumps(dict(channel='Indianapolis Colts')))
+            project_bytes=path.read_bytes();import_bytes=imported.read_bytes()
+            style=for_clip(tmp,package)
+            self.assertEqual(required_tags(package['final_transcript'],style),['#Colts','#NFL','#Football','#fyp'])
+            self.assertEqual(path.read_bytes(),project_bytes);self.assertEqual(imported.read_bytes(),import_bytes)
+
+    def test_clip_titles_are_presentation_only_and_library_changes_change_cache(self):
+        bank=dict(examples=[dict(id='good',posted_title='Running backs trust the blocking #NFL',label='Good pattern',status='Needs review'),
+                            dict(id='avoid',posted_title='A bad pattern',label='Avoid this pattern',status='Needs review'),
+                            dict(id='excluded',posted_title='Excluded',label='Good pattern',status='Excluded')])
+        with patch('example_library.load',return_value=bank):
+            titles=saved_clip_titles()
+        self.assertEqual([e['id'] for e in titles],['good'])
+        profile=build_profile(corpus());package=dict(fingerprint='clip',final_transcript='Running backs trust the blocking up front.')
+        with patch('posting_style.saved_clip_titles',return_value=titles):
+            style=context(package['final_transcript'],profile)
+        self.assertEqual(style['clip_title_examples'][0]['id'],'good')
+        first,_=identity(package,{},style)
+        with patch('posting_style.saved_clip_titles',return_value=[dict(titles[0],headline='Running backs follow the blocking')]):
+            updated=context(package['final_transcript'],profile)
+        self.assertNotEqual(identity(package,{},updated)[0],first)
+
+    def test_approved_rewrite_is_retrieved_without_becoming_clip_evidence(self):
+        c=corpus();c['title_feedback']=[dict(original='Buck and Tommy complement each other on interior rushes',
+                                          preferred='How Buck and Tommy Work Together on the Interior Pass Rush #Colts #NFL #Football #fyp')]
+        profile=build_profile(c);text='Buck and Tommy complement each other on interior rushes.'
+        style=context(text,profile)
+        self.assertEqual(len(style['approved_title_rewrites']),1)
+        self.assertEqual(context('Flour and water feed sourdough.',profile)['approved_title_rewrites'],[])
+        raw=dict(title_options=['Buck and Tommy Work Together','How Buck and Tommy Complement Each Other'],hashtags=[],description='Two interior rushers combine their different approaches.',evidence_ids=[0])
+        verdict=dict(faithful=True,approved_titles=raw['title_options'],best_title=raw['title_options'][0])
+        with patch('shorts_editor.generate_json',side_effect=[raw,verdict]) as generate:
+            result=generate_local(text,None,style=style)
+        self.assertIn('approved_title_rewrites',generate.call_args_list[0].args[0])
+        self.assertNotIn('approved_title_rewrites',generate.call_args_list[1].args[0])
+        self.assertTrue(result['title'].endswith('#fyp'))
 
     def test_reference_data_reaches_writer_but_is_absent_from_source_checker(self):
         from test_ai_social_copy import TEXT,raw_copy,checked_verdict

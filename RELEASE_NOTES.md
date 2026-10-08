@@ -1,3 +1,9 @@
+# v5.34 · Your preferred title tags and clip-title references
+
+- New AI titles always include **#fyp**. Colts titles reserve **#Colts #NFL #Football #fyp**, using speech or saved source title/publisher context. Supported player/topic tags can be added when they fit the 100-character title limit; mandatory tags are never silently dropped.
+- Adds saved Good pattern clip titles and approved title rewrites to local writing-style retrieval alongside the PDF examples. Your approved Buck/Tommy rewrite is saved on this Mac. References guide phrasing, while the source checker still sees only final speech and generated copy.
+- Keeps earlier copy caches, manual text, reviewed posting drafts, videos, transcripts and exports. The version badge is v5.34; no model weights, analysis-cache version or app runtime dependencies change. See [validation](V534_VALIDATION.md).
+
 # v5.33 · A local Indy Audible posting style
 
 - Adds a private local title/description/hashtag reference built from the supplied PDF. All 63 posts and the original PDF are archived; 56 references are eligible after filtering copied speech, generic descriptions and conflicting years/outcomes. No model weights change or performance learning is claimed.

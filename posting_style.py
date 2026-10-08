@@ -12,7 +12,8 @@ from project_store import read, write
 VERSION = 'posting-style-1'
 PROFILE = ROOT/'data/posting-style/profile.json'
 TAG = re.compile(r'(?<!\w)#[\w]+', re.UNICODE)
-IGNORED_TAGS = {'fyp', 'fpy', 'viral', 'trending', 'pushed', 'different', 'team', 'win'}
+IGNORED_TAGS = {'fpy', 'viral', 'trending', 'pushed', 'different', 'team', 'win'}
+COLTS_TAGS = ['#Colts', '#NFL', '#Football', '#fyp']
 COMMON = set('the a an and or but is are was were it this that to of for on in at as with from by be have has had their our your its he she they his her how why what who can could will would should more about colts nfl football indianapolis interview clip video says said'.split())
 COMMON.update('you we me my them us not no do don doesn did didn t really know get got going want wants need needs sort feel like guys guy actually much things games game now anymore even terms areas where these those way ways'.split())
 TOPICS = {
@@ -39,6 +40,7 @@ def plain(text):
 def supported_tag(tag, text):
     if not isinstance(tag, str) or not re.fullmatch(r'#[\w]+', tag):return False
     body=tag[1:].replace('_','').casefold()
+    if body=='fyp':return True  # Explicit creator preference, not a factual claim.
     if len(body)<3 or body in IGNORED_TAGS:return False
     source=words(text)
     # Require whole adjacent words, not a substring of an unrelated word.
@@ -98,7 +100,14 @@ def build_profile(corpus):
                 clean_tags.append(tag);tags[body]+=1
         examples.append(dict(id=row['id'],headline=headline,description=desc,hashtags=clean_tags[:8]))
     if not examples:raise ValueError('No usable title/description references were found.')
+    feedback=corpus.get('title_feedback',[])
+    if not isinstance(feedback,list) or len(feedback)>20:raise ValueError('Keep at most 20 approved title rewrites.')
+    for edit in feedback:
+        if not isinstance(edit,dict) or any(not isinstance(edit.get(k),str) or not 1<=len(edit[k])<=200 for k in ('original','preferred')):
+            raise ValueError('Title feedback needs an original and preferred title.')
+    feedback=[dict(original=plain(e['original']),preferred=plain(e['preferred'])) for e in feedback]
     body=dict(version=VERSION,channel=channel,total_posts=len(records),examples=examples,audit=audit,
+              title_feedback=feedback,
               hashtag_counts=dict(tags.most_common()),source_name=plain(corpus.get('source_name','')),
               source_sha256=corpus.get('source_sha256',''),source_date=corpus.get('source_date',''),
               corpus_sha256=hashlib.sha256(json.dumps(corpus,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),
@@ -141,34 +150,89 @@ def load(path=PROFILE):
                 if not isinstance(example[name],str) or not 1<=len(example[name])<=limit:return {}
             if not isinstance(example['hashtags'],list) or len(example['hashtags'])>8:return {}
             if any(not isinstance(t,str) or not re.fullmatch(r'#[\w]+',t) for t in example['hashtags']):return {}
+        feedback=data.get('title_feedback',[])
+        if not isinstance(feedback,list) or len(feedback)>20:return {}
+        for edit in feedback:
+            if not isinstance(edit,dict) or any(not isinstance(edit.get(k),str) or not 1<=len(edit[k])<=200 for k in ('original','preferred')):return {}
     except (KeyError,TypeError,ValueError):return {}
     return data
 
 
-def context(text, profile=None):
-    profile=load() if profile is None else profile
-    if not profile:return {}
-    examples=profile['examples']
+def related(text, examples, limit=3):
+    """Rank presentation references without using their facts as clip evidence."""
+    if not examples:return []
     query=set(words(text))-COMMON
-    frequency=collections.Counter(t for e in examples for t in set(words(e['headline']+' '+e['description']))-COMMON)
-    def score(example):
-        terms=set(words(example['headline']+' '+example['description']))-COMMON
-        return sum(math.log(1+len(examples)/(1+frequency[t])) for t in query & terms)
-    ranked=sorted(examples,key=lambda e:(-score(e),e['id']))
-    best=score(ranked[0])
-    selected=[];seen=set()
+    terms=lambda e:set(words(e.get('headline','')+' '+e.get('description','')))-COMMON
+    frequency=collections.Counter(t for e in examples for t in terms(e))
+    score=lambda e:sum(math.log(1+len(examples)/(1+frequency[t])) for t in query & terms(e))
+    ranked=sorted(examples,key=lambda e:-score(e))
+    best=score(ranked[0]);selected=[];seen=set()
     for example in ranked:
-        shared=query & (set(words(example['headline']+' '+example['description']))-COMMON)
-        if score(example)<=0 or score(example)<.6*best or len(shared)<2:continue
+        if score(example)<=0 or score(example)<.6*best or len(query & terms(example))<2:continue
         headline=example['headline'].casefold()
         if headline in seen:continue
-        seen.add(headline)
+        seen.add(headline);selected.append(example)
+        if len(selected)==limit:break
+    return selected
+
+
+def saved_clip_titles():
+    from example_library import load as load_library
+    try:bank=load_library(ROOT)
+    except ValueError:return []
+    titles=[]
+    for example in bank['examples']:
+        if example['status']=='Excluded' or example['label']!='Good pattern':continue
+        title=example.get('posted_title','')
+        if not isinstance(title,str):continue
+        headline=plain(TAG.sub('',title))
+        if 1<=len(headline)<=140:
+            titles.append(dict(id=example['id'],headline=headline,source='saved clip title; style only'))
+    return titles
+
+
+def required_tags(text, style=None):
+    """Brand/category tags are separate from evidence-based player/topic tags."""
+    source=(style or {}).get('source_context',{})
+    source_text=' '.join(str(source.get(k,'')) for k in ('title','channel'))
+    heard=text+' '+source_text
+    if re.search(r'\bcolts\b',heard,re.I):return list(COLTS_TAGS)
+    if re.search(r'\bnfl\b',heard,re.I):return ['#NFL','#Football','#fyp']
+    if re.search(r'\bfootball\b',heard,re.I):return ['#Football','#fyp']
+    return ['#fyp']
+
+
+def context(text, profile=None, source=None):
+    profile=load() if profile is None else profile
+    if not profile:
+        return dict(source_context=source) if source else {}
+    examples=profile['examples']
+    selected=[]
+    for example in related(text,examples):
         # Prompt examples show good tag placement using only relevant historical tags.
         tags=[t for t in example['hashtags'] if supported_tag(t,example['headline']+' '+example['description'])]
-        selected.append(dict(id=example['id'],headline=example['headline'],description=example['description'],hashtags=tags[:2]))
-        if len(selected)==3:break
-    return dict(channel=profile['channel'],fingerprint=profile['fingerprint'],total_posts=profile['total_posts'],
-                eligible_examples=len(examples),examples=selected)
+        selected.append(dict(id=example['id'],headline=example['headline'],description=example['description'],hashtags=tags[:4]))
+    clips=saved_clip_titles()
+    edits=[dict(id=i,headline=plain(TAG.sub('',e['preferred'])),original=e['original'],preferred=e['preferred'])
+           for i,e in enumerate(profile.get('title_feedback',[]))]
+    library_key=hashlib.sha256(json.dumps(clips,sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:16]
+    result=dict(channel=profile['channel'],fingerprint=profile['fingerprint'],total_posts=profile['total_posts'],
+                eligible_examples=len(examples),examples=selected,clip_title_examples=related(text,clips,2),
+                saved_clip_titles=len(clips),clip_titles_fingerprint=library_key,approved_title_rewrites=related(text,edits,2))
+    if source:result['source_context']=source
+    return result
+
+
+def for_clip(folder, package):
+    project=read(Path(folder)/'project.json',{})
+    imported=read(Path(folder)/'import.json',{})
+    source={}
+    for key in ('title','channel'):
+        value=project.get(key) if isinstance(project,dict) else None
+        if not isinstance(value,str) or not value.strip():
+            value=imported.get(key) if isinstance(imported,dict) else None
+        if isinstance(value,str) and value.strip():source[key]=plain(value)[:300]
+    return context(package['final_transcript'],source=source or None)
 
 
 def suggested_tags(text, style):
@@ -182,6 +246,7 @@ def suggested_tags(text, style):
 
 
 def provenance(style):
-    if not style:return {}
+    if not style or 'channel' not in style:return {}
     return dict(channel=style['channel'],fingerprint=style['fingerprint'],total_posts=style['total_posts'],
-                example_ids=[e['id'] for e in style['examples']])
+                example_ids=[e['id'] for e in style['examples']],clip_title_ids=[e['id'] for e in style.get('clip_title_examples',[])],
+                approved_rewrite_ids=[e['id'] for e in style.get('approved_title_rewrites',[])])

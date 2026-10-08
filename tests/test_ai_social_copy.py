@@ -31,7 +31,7 @@ class AISocialCopyTests(unittest.TestCase):
 
     def test_hashtags_are_part_of_title_and_description_is_a_summary(self):
         result=normalize(raw_copy(),TEXT)
-        self.assertEqual(result['title'],'Keep your speed and momentum #Momentum #Speed')
+        self.assertEqual(result['title'],'Keep your speed and momentum #Momentum #Speed #fyp')
         self.assertNotIn('hashtags',result)
         self.assertNotIn('#',result['description'])
         self.assertLessEqual(len(result['title']),100)
@@ -39,7 +39,7 @@ class AISocialCopyTests(unittest.TestCase):
     def test_unsupported_tags_are_omitted_and_existing_tags_are_not_duplicated(self):
         raw=dict(raw_copy(),title='Keep momentum #Momentum',hashtags=['#Momentum','#NFL','#London','#Speed'])
         result=normalize(raw,TEXT)
-        self.assertEqual(result['title'],'Keep momentum #Momentum #Speed')
+        self.assertEqual(result['title'],'Keep momentum #Momentum #Speed #fyp')
         self.assertNotIn('#NFL',result['title'])
 
     def test_title_limit_keeps_whole_tags_and_does_not_truncate_qualifications(self):
@@ -52,8 +52,9 @@ class AISocialCopyTests(unittest.TestCase):
 
     def test_bad_fields_and_ungrounded_evidence_are_rejected(self):
         for fields in (dict(title=''),dict(title='#Momentum'),dict(title='T'*101),dict(description='Summary #Momentum'),
-                       dict(evidence_quotes=['Invented source words']),dict(hashtags=['#FakeEvent']),dict(description='')):
+                       dict(evidence_quotes=['Invented source words']),dict(description='')):
             with self.subTest(fields=fields),self.assertRaises(ValueError):normalize(dict(raw_copy(),**fields),TEXT)
+        self.assertEqual(normalize(dict(raw_copy(),hashtags=['#FakeEvent']),TEXT)['title'],'Keep your speed and momentum #fyp')
 
     def test_independent_fidelity_check_can_veto_generated_text(self):
         with patch('shorts_editor.generate_json',side_effect=[raw_copy(),dict(faithful=False,reason='Invented a guaranteed result.')]*2):
@@ -161,7 +162,7 @@ class AISocialCopyTests(unittest.TestCase):
 
     def test_checker_selects_stronger_hook_and_all_title_ideas_keep_inline_tags(self):
         with patch('shorts_editor.generate_json',side_effect=[raw_copy(),checked_verdict(best=1)]):result=generate_local(TEXT,None)
-        self.assertEqual(result['title'],'Why the Best Cut Is No Cut #Momentum #Speed')
+        self.assertEqual(result['title'],'Why the Best Cut Is No Cut #Momentum #Speed #fyp')
         self.assertEqual(result['title_options'][0],result['title'])
         self.assertEqual(len(result['title_options']),3)
         self.assertTrue(all('#' in t and len(t)<=100 for t in result['title_options']))

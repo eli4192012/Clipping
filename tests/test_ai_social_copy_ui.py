@@ -49,14 +49,30 @@ class AISocialCopyUITests(unittest.TestCase):
             next(b for b in app.button if b.label=='Generate title & description with AI').click().run()
         self.assertFalse(app.exception);worker.assert_called_once()
         self.assertEqual(worker.call_args.args[1]['text'],self.primary['text'])
-        self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'Keep your speed and momentum #Momentum #Speed')
+        self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'Keep your speed and momentum #Momentum #Speed #fyp')
         description=next(t for t in app.text_area if t.label=='YouTube description').value
         self.assertNotIn('#',description);self.assertIn('avoiding cuts',description)
-        self.assertEqual(self.composer.call_args.args[-1]['title'],'Keep your speed and momentum #Momentum #Speed')
+        self.assertEqual(self.composer.call_args.args[-1]['title'],'Keep your speed and momentum #Momentum #Speed #fyp')
         self.assertEqual(self.composer.call_args.args[-1]['description'],description)
         self.assertEqual(self.export.call_count,1)
         reopened=self.new_app().run();self.assertFalse(reopened.exception)
-        self.assertEqual(next(t for t in reopened.text_input if t.label=='YouTube title').value,'Keep your speed and momentum #Momentum #Speed')
+        self.assertEqual(next(t for t in reopened.text_input if t.label=='YouTube title').value,'Keep your speed and momentum #Momentum #Speed #fyp')
+        self.assertEqual(self.export.call_count,1)
+
+    def test_colts_ai_titles_include_all_defaults_without_the_model_returning_them(self):
+        (self.folder/'project.json').write_text(json.dumps(dict(title='Colts interview',channel='Indianapolis Colts')))
+        app=self.app.run();self.assertFalse(app.exception)
+        self.assertTrue(any('always include #fyp' in c.value for c in app.caption))
+        with patch('upgrades.worker',return_value=checked_copy()):
+            next(b for b in app.button if b.label=='Generate title & description with AI').click().run()
+        self.assertFalse(app.exception)
+        title=next(t for t in app.text_input if t.label=='YouTube title').value
+        for tag in ('#Colts','#NFL','#Football','#fyp'):self.assertIn(tag,title.split())
+        self.assertTrue(title.endswith('#fyp'));self.assertLessEqual(len(title),100)
+        self.assertEqual(self.composer.call_args.args[-1]['title'],title)
+        self.assertEqual(self.export.call_count,1)
+        reopened=self.new_app().run();self.assertFalse(reopened.exception)
+        self.assertEqual(next(t for t in reopened.text_input if t.label=='YouTube title').value,title)
         self.assertEqual(self.export.call_count,1)
 
     def test_failed_regeneration_preserves_manual_saved_copy(self):
@@ -104,7 +120,7 @@ class AISocialCopyUITests(unittest.TestCase):
             app.run()
             self.assertFalse(app.exception)
             reload.assert_called_once_with(packaging_ui)
-            self.assertEqual(packaging_ui.POST_FORM_API,5)
+            self.assertEqual(packaging_ui.POST_FORM_API,6)
             self.assertTrue(any(b.label=='Generate title & description with AI' for b in app.button))
             self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My saved title #Speed')
         self.assertEqual((self.folder/'platform-posts-v517.json').read_bytes(),saved)

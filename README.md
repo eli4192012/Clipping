@@ -42,7 +42,7 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.33**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.34**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
 
 ## Personal posting style
 
@@ -50,9 +50,13 @@ The local posting writer can use your saved titles, descriptions and inline hash
 
 When you open **Social media**, the writer selects up to three related references and displays the channel/style count. It writes distinct title approaches with optional questions, a natural one- or two-sentence description, and supported entity/topic hashtags inside the title. Historical examples guide phrasing only. Their names, scores, dates and claims are not evidence for the new clip. The source checker sees only the final kept speech; additional guards reject unstated confidence/resilience/chemistry/sharpness claims and numbers absent from that speech. Evidence phrase IDs attach exact speech without asking the model to reconstruct a quote. These guards are conservative and can still reject good phrasing or miss errors; review before publishing.
 
+New AI-generated titles **always include `#fyp`**. Colts clips use **`#Colts #NFL #Football #fyp`**, identified from the final speech or saved video title/publisher, including the YouTube import manifest. These category tags are separate from player/topic tags that still require current speech evidence. The app reserves space for the required suffix within 100 characters, then adds up to two supported optional tags if they fit. It never cuts off the headline or drops `#fyp` to make room; a too-long headline gets a bounded AI repair.
+
+The writer also retrieves up to two related posted titles from saved Example library clips labeled **Good pattern** and not **Excluded**. These are presentation references only; they do not establish successful performance or verified factual claims. On this Mac, two saved clip titles are eligible. Your approved Buck/Tommy rewrite is stored as title feedback with the PDF corpus and is retrieved for related topics. References and category metadata do not enter the source-check prompt. Changes to eligible clip titles also separate posting caches. Existing manual text and reviewed drafts are preserved; use **Generate fresh text** to request a replacement. See [v5.34 validation](V534_VALIDATION.md).
+
 The profile and corpus are stored under ignored `data/posting-style/`. They remain on this Mac and are not included in GitHub clones. A new profile gets a separate posting-cache identity; transcription, analysis, edits, model weights and previous copy are retained. Saved manual text and reviewed publishing drafts stay authoritative. Use **Generate fresh text** to explicitly replace their posting fields with a new checked draft. No clip is published by importing examples or generating text.
 
-For another extracted corpus, use `.venv/bin/python scripts/import_posting_style.py /absolute/path/examples.json`. The UTF-8 JSON schema contains `channel` and `records`, each with a unique integer `id`, `title`, and `description`; optional source-name/hash/date fields record provenance. Imports archive all original pairs before replacing the active profile. Parsing PDFs is an import preparation step and adds no app runtime dependency. See [v5.33 validation](V533_VALIDATION.md).
+For another extracted corpus, use `.venv/bin/python scripts/import_posting_style.py /absolute/path/examples.json`. The UTF-8 JSON schema contains `channel` and `records`, each with a unique integer `id`, `title`, and `description`; optional source-name/hash/date fields record provenance. Optional `title_feedback` contains at most 20 explicit approved rewrites with `original` and `preferred` strings. Imports archive all original pairs before replacing the active profile. Parsing PDFs is an import preparation step and adds no app runtime dependency. See [v5.33 extraction validation](V533_VALIDATION.md).
 
 ## Line up videos to process while you are away
 
