@@ -562,7 +562,7 @@ if page=='editor':
     final_words=remap_words(export_words,final_ranges)
     import packaging_ui
     # An already-running server can retain older posting controls.
-    if getattr(packaging_ui,'POST_FORM_API',0)<4 or not getattr(packaging_ui,'OPENING_HOOK_API',0):
+    if getattr(packaging_ui,'POST_FORM_API',0)<5 or not getattr(packaging_ui,'OPENING_HOOK_API',0):
         import importlib
         importlib.reload(packaging_ui)
     from packaging_ui import look_form,post_form,advanced

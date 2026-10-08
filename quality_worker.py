@@ -43,7 +43,7 @@ def run(task,p,progress=lambda p,label:None):
         from local_editor import load_bundle
         from social_copy import generate_local
         if not p.get('text','').strip():raise ValueError('This clip needs a speech transcript for AI posting text.')
-        return generate_local(p['text'],load_bundle(p,large=True),progress)
+        return generate_local(p['text'],load_bundle(p,large=True),progress,style=p.get('posting_style',{}))
     if task=='headline':
         from local_editor import load_bundle
         from polish import title_for

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from project_store import read, write
 
-POST_FORM_API=4
+POST_FORM_API=5
 OPENING_HOOK_API=1
 
 
@@ -60,7 +60,7 @@ def look_form(style,package,words,mode,identity,ranged=False):
 def post_form(folder,package,settings=None,active=False):
     import streamlit as st
     import social_copy
-    if social_copy.VERSION!='social-copy-4':
+    if social_copy.VERSION!='social-copy-5':
         import importlib
         importlib.reload(social_copy)
     from social_copy import VERSION,inline_title,inline_caption,get_copy,identity,refresh_fields,posting_error
@@ -83,7 +83,12 @@ def post_form(folder,package,settings=None,active=False):
     ai_key,model=identity(package,settings)
     refresh=refresh_fields(stored.get('YouTube Shorts'),default,ai_key)
     attempt_key='auto-social-copy-'+ai_key
-    st.caption('AI writes a hook title and a short teaser when you open Social media. Review the text, try another title idea, or edit it yourself.')
+    st.caption('AI writes a hook title and a natural description when you open Social media. Review the text, try another title idea, or edit it yourself.')
+    from posting_style import context
+    reference=context(package['final_transcript'])
+    if reference:
+        count=len(reference['examples'])
+        st.caption(f"{reference['channel']} writing style · {reference['total_posts']} posts saved · {count} relevant example{'s' if count!=1 else ''} for this clip")
     for platform in ('YouTube Shorts','TikTok','Instagram Reels'):
         post=posts.get(platform,package['posting'][platform])
         with st.expander(platform+' posting package',expanded=platform=='YouTube Shorts'):
@@ -101,7 +106,7 @@ def post_form(folder,package,settings=None,active=False):
                     st.session_state[attempt_key]=True
                     try:
                         result=run_job('social-copy-'+ai_key,lambda update:get_copy(folder,package,settings,update,force=fresh),75)
-                        updated=dict(title=result['title'],description=result['description'],hashtags=[],title_options=result['title_options'],ai_model=result['editor_model'],ai_version=VERSION,ai_key=ai_key,copy_origin='ai')
+                        updated=dict(title=result['title'],description=result['description'],hashtags=[],title_options=result['title_options'],ai_model=result['editor_model'],ai_version=VERSION,ai_key=ai_key,copy_origin='ai',posting_style=result.get('posting_style',{}))
                         if auto and refresh!={'title','description'}:
                             for field in ('title','description'):
                                 if field not in refresh:updated[field]=inline_title(post.get(field,''),post.get('hashtags',[])) if field=='title' else post.get(field,'')

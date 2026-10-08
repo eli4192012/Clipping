@@ -24,7 +24,7 @@ class AISocialCopyUITests(unittest.TestCase):
         self.srt=self.folder/'render.srt';self.srt.write_text('1\n00:00:00,000 --> 00:00:01,000\nTest.\n')
         self.settings=dict(mode='Interview',minimum=5,maximum=30,vision=False,semantic=True,quality='Balanced',portrait=False,shorts_editor=True,windows=6,editor_model='qwen3-4b')
         self.state=dict(page='editor',project=dict(source=str(self.source),folder=str(self.folder),title='Interview fixture',duration=25),settings=self.settings,result_path=str(self.analysis),clip_index=0)
-        self.patches=[patch('engine.export_clip',return_value=(self.video,self.srt)),patch('boundary_editor.editor',return_value=None),patch('clip_thumbnails.show'),patch('social_ui.composer'),patch('local_editor.installed',return_value=True),patch('upgrades.worker',side_effect=AssertionError('Unrequested inference')),patch('ui_jobs.run_job',side_effect=lambda key,work,estimate:work(lambda *args:None))]
+        self.patches=[patch('engine.export_clip',return_value=(self.video,self.srt)),patch('boundary_editor.editor',return_value=None),patch('clip_thumbnails.show'),patch('social_ui.composer'),patch('local_editor.installed',return_value=True),patch('upgrades.worker',side_effect=AssertionError('Unrequested inference')),patch('ui_jobs.run_job',side_effect=lambda key,work,estimate:work(lambda *args:None)),patch('posting_style.load',return_value={})]
         self.export=self.patches[0].start()
         self.composer=None
         for i,p in enumerate(self.patches[1:],1):
@@ -104,7 +104,7 @@ class AISocialCopyUITests(unittest.TestCase):
             app.run()
             self.assertFalse(app.exception)
             reload.assert_called_once_with(packaging_ui)
-            self.assertEqual(packaging_ui.POST_FORM_API,4)
+            self.assertEqual(packaging_ui.POST_FORM_API,5)
             self.assertTrue(any(b.label=='Generate title & description with AI' for b in app.button))
             self.assertEqual(next(t for t in app.text_input if t.label=='YouTube title').value,'My saved title #Speed')
         self.assertEqual((self.folder/'platform-posts-v517.json').read_bytes(),saved)
@@ -114,6 +114,18 @@ class AISocialCopyUITests(unittest.TestCase):
         with patch('importlib.reload',side_effect=AssertionError('Current posting code should not be reloaded')):
             app=self.app.run();self.assertFalse(app.exception)
             app.run();self.assertFalse(app.exception)
+        self.assertEqual(self.export.call_count,1)
+
+    def test_personal_style_is_visible_and_sent_to_worker_without_rendering_again(self):
+        from posting_style import build_profile
+        profile=build_profile(dict(channel='Example channel',records=[dict(id=1,title='Speed and momentum',description='Momentum helps a run develop without extra cuts.')]))
+        app=self.app.run()
+        with patch('posting_style.load',return_value=profile),patch('upgrades.worker',return_value=checked_copy()) as worker:
+            app.run()
+            self.assertTrue(any('Example channel writing style' in c.value for c in app.caption))
+            next(b for b in app.button if b.label=='Generate title & description with AI').click().run()
+            self.assertFalse(app.exception)
+            self.assertEqual(worker.call_args.args[1]['posting_style']['fingerprint'],profile['fingerprint'])
         self.assertEqual(self.export.call_count,1)
 
     def open_social(self,app):

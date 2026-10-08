@@ -1,3 +1,10 @@
+# v5.33 · A local Indy Audible posting style
+
+- Adds a private local title/description/hashtag reference built from the supplied PDF. All 63 posts and the original PDF are archived; 56 references are eligible after filtering copied speech, generic descriptions and conflicting years/outcomes. No model weights change or performance learning is claimed.
+- Selects up to three related examples per clip and shows the writing-style count in **Social media**. Distinct headline approaches replace forced questions; descriptions can use one or two natural sentences. Entity/topic tags replace arbitrary spoken-word tag suggestions and remain inside the title.
+- Keeps historical examples out of the factual checker. Adds guards for imported numbers/dates and unstated confidence, resilience, chemistry or sharpness, plus exact source-phrase IDs for evidence. A bounded repair remains available; failed generations preserve existing text.
+- Profile fingerprints isolate posting caches when examples change. Earlier AI copy, manual text, reviewed publishing drafts, clips, source videos, transcripts, analyses and model weights remain saved. All processing and the example corpus stay local; the corpus is excluded from Git. See [validation](V533_VALIDATION.md).
+
 # v5.32 · Optional closed-lid clipping with Amphetamine
 
 - Adds **Allow lid-closed processing with Amphetamine** before starting waiting queue videos. Requires the free Mac App Store utility and a connected charger. First-use macOS Automation and Amphetamine closed-display prompts must be completed before closing the lid.

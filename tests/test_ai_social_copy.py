@@ -24,6 +24,11 @@ def checked_copy():
 
 
 class AISocialCopyTests(unittest.TestCase):
+    def setUp(self):
+        # Regression fixtures are independent of this user's private corpus.
+        patcher=patch('posting_style.load',return_value={})
+        patcher.start();self.addCleanup(patcher.stop)
+
     def test_hashtags_are_part_of_title_and_description_is_a_summary(self):
         result=normalize(raw_copy(),TEXT)
         self.assertEqual(result['title'],'Keep your speed and momentum #Momentum #Speed')
@@ -95,7 +100,7 @@ class AISocialCopyTests(unittest.TestCase):
             with self.assertRaises(ValueError):generate_local('',None)
 
     def test_added_uncertainty_is_rejected_and_one_repair_can_succeed(self):
-        bad=dict(raw_copy(),title='Maybe speed is preserved',title_options=['Maybe speed is preserved','Why the Best Cut Is No Cut'])
+        bad=dict(raw_copy(),title='Maybe speed is preserved',title_options=['Maybe speed is preserved','Could no cut preserve momentum?'])
         with self.assertRaisesRegex(ValueError,'added uncertainty'):normalize(bad,TEXT)
         with patch('shorts_editor.generate_json',side_effect=[bad,raw_copy(),checked_verdict()]) as generate:
             self.assertTrue(generate_local(TEXT,None)['source_check']['faithful'])
