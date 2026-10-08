@@ -37,7 +37,13 @@ def runs_for(project):
         if not row:
             mode,minimum,maximum,count,variant=match.groups() if match else ('Interview',legacy[1],legacy[2],'all',legacy[3])
             settings=dict(current,quality='Balanced',alignment=False,speakers=False,scenes=False,mode=mode,minimum=int(minimum),maximum=int(maximum),semantic=variant=='ai',vision=variant.startswith('vision'),windows=int(variant[6:]) if variant.startswith('vision') else 6)
-            settings['shorts_editor']='-shorts1-' in path.name
+            # Today's editor selection must not relabel an unregistered older run.
+            settings.pop('editor_model',None)
+            from local_editor import CHOICES,cache_tag
+            for editor in CHOICES:
+                tag=cache_tag(dict(settings,editor_model=editor))
+                if tag and tag in path.name:settings['editor_model']=editor;break
+            settings['shorts_editor']=bool(re.search(r'-shorts\d+-',path.name))
             # Recover old run model settings from their recorded signature, not today's UI choice.
             for quality,scenes,speakers,alignment in itertools.product(['Balanced','Higher quality'],[False,True],[False,True],[False,True]):
                 trial=dict(settings,quality=quality,scenes=scenes,speakers=speakers,alignment=alignment)

@@ -1,4 +1,5 @@
 """Lightweight cut inspection and precise controls; no model inference."""
+from app_logging import log_exception
 import math
 from pathlib import Path
 
@@ -77,7 +78,9 @@ def editor(source,total,start,end,transcript,identity):
             for label,at,column in zip(['Start','End'],[pending_start,pending_end],st.columns(2)):
                 with column:
                     try:near=frames(str(source),Path(source).stat().st_mtime_ns,at,total)
-                    except Exception:st.info('Frame preview unavailable. Exact time controls still work.');continue
+                    except Exception:
+                        log_exception('boundary_editor')
+                        st.info('Frame preview unavailable. Exact time controls still work.');continue
                     if near['image']:st.image(near['image'],caption=f"{label} preview · nearest frame at {near['time']:.6f}s")
                     before,after=st.columns(2)
                     for direction,button_column in [(-1,before),(1,after)]:

@@ -1,3 +1,4 @@
+from app_logging import log_exception
 from resource_limits import configure
 configure()
 import hashlib
@@ -9,11 +10,24 @@ from engine import ROOT,SPEECH,EDITOR,duration,export_clip
 from interview import interview_content
 from vision_sports import VISION,football_hint
 from modes import PROFILES
+import youtube_import
+if getattr(youtube_import,'YOUTUBE_IMPORT_API',0)<2:
+    import importlib
+    importlib.reload(youtube_import)
 from youtube_import import lookup,download,normalize_url
+import jobs,audience_quality
+if getattr(jobs,'CURATION_API',0)<2 or getattr(audience_quality,'CURATION_API',0)<1:
+    import importlib
+    importlib.reload(audience_quality);importlib.reload(jobs)
 from jobs import analyze,analysis_path,estimate_seconds
 from ui_jobs import run_job,clock
 from review_ui import review_form,review_history
 from upgrades import TURBO,EDITOR4,VISION4,SPEAKERS,transcript_file
+from local_editor import QWEN35,CHOICES,LABELS,installed,preferred_editor
+import interview_integrity
+if getattr(interview_integrity,'QUESTION_COUNT_API',0)<2:
+    import importlib
+    importlib.reload(interview_integrity)
 
 st.set_page_config(page_title='Clipping · Your local studio',page_icon=str(ROOT/'assets/mark.svg'),layout='wide',initial_sidebar_state='expanded')
 version=json.loads((ROOT/'version.json').read_text())
@@ -23,7 +37,7 @@ install(st)
 @st.dialog('What changed',width='large')
 def release_report():
     st.markdown((ROOT/'RELEASE_NOTES.md').read_text())
-    validation=ROOT/'V516_VALIDATION.md'
+    validation=ROOT/f"V{version['major']}{version['minor']}_VALIDATION.md"
     if validation.exists():
         with st.expander('Test results and limitations'):
             st.markdown(validation.read_text())
@@ -38,9 +52,17 @@ with st.container(key='release-header'):
     if version_button.button(release,help='Open the release report',use_container_width=True):release_report()
 st.session_state.setdefault('page','library')
 page=st.session_state.page
+import clip_queue
+if getattr(clip_queue,'QUEUE_API',0)<2:
+    import importlib
+    importlib.reload(clip_queue)
+from clip_queue import resume_enabled_queue
+resume_enabled_queue(ROOT)
+from channel_watch import ensure_watcher
+ensure_watcher(ROOT)
 stages=['source','settings','processing','complete','results','editor']
 active=0 if page=='source' else 1 if page=='settings' else 2 if page=='processing' else 3
-if page not in ('library','source','accounts','social_history'):
+if page not in ('library','source','accounts','social_history','combine','examples','before_after','queue','channels'):
     st.markdown('<nav class="steps" aria-label="Project progress">'+ '<span class="step-connector" aria-hidden="true">—</span>'.join(f'<span class="step {"active" if i==active else "done" if i<active else ""}" '+('aria-current="step"' if i==active else '')+f'><span class="step-number">{"✓" if i<active else f"{i+1:02}"}</span>{name}</span>' for i,name in enumerate(['Add video','Make it yours','Find moments','Review clips']))+'</nav>',unsafe_allow_html=True)
 
 
@@ -64,14 +86,56 @@ with st.sidebar:
     st.markdown('<div class="eyebrow">WORKSPACE</div>',unsafe_allow_html=True)
     if page!='processing' and st.button('My projects',icon=':material/home:',use_container_width=True,type='primary' if page=='library' else 'secondary'):go('library')
     if page!='processing' and st.button('＋ New project',icon=':material/add_circle:',use_container_width=True,type='primary' if page=='source' else 'secondary'):go('source')
+    if page!='processing' and st.button('Video queue',icon=':material/queue_play_next:',use_container_width=True,type='primary' if page=='queue' else 'secondary'):go('queue')
+    if page!='processing' and st.button('YouTube channels',icon=':material/subscriptions:',use_container_width=True,type='primary' if page=='channels' else 'secondary'):go('channels')
+    if page!='processing' and st.button('Combine clips',icon=':material/playlist_add:',use_container_width=True,type='primary' if page=='combine' else 'secondary'):go('combine')
+    if page!='processing' and st.button('Example library',icon=':material/bookmarks:',use_container_width=True,type='primary' if page=='examples' else 'secondary'):go('examples')
+    if page!='processing' and st.button('Before & after',icon=':material/compare:',use_container_width=True,type='primary' if page=='before_after' else 'secondary'):go('before_after')
     if page!='processing' and st.button('Accounts',icon=':material/group:',use_container_width=True):go('accounts')
     if page!='processing' and st.button('Publishing history',icon=':material/history:',use_container_width=True):go('social_history')
     st.divider()
     with st.expander('Local tools & status'):
-        for name,ready in [('Speech',(SPEECH/'model.bin').exists()),('Meaning',(EDITOR/'.ready').exists()),('Sports vision',(VISION/'.ready').exists()),('Turbo speech',(TURBO/'.ready').exists()),('4B meaning',(EDITOR4/'.ready').exists()),('4B sports vision',(VISION4/'.ready').exists()),('Word alignment',(ROOT/'models/alignment/.ready').exists()),('Speaker detection',(SPEAKERS/'.ready').exists())]:
+        for name,ready in [('Speech',(SPEECH/'model.bin').exists()),('Meaning',(EDITOR/'.ready').exists()),('Sports vision',(VISION/'.ready').exists()),('Turbo speech',(TURBO/'.ready').exists()),('Qwen3.5 AI editor',installed(QWEN35)),('4B meaning',(EDITOR4/'.ready').exists()),('4B sports vision',(VISION4/'.ready').exists()),('Word alignment',(ROOT/'models/alignment/.ready').exists()),('Speaker detection',(SPEAKERS/'.ready').exists())]:
             st.write(f"{'✓' if ready else '○'} {name}")
         st.caption('Missing a model? Run Download Models.command in the Clipping folder.')
     st.markdown('<div class="studio-note"><strong><span class="local-dot"></span>Local by default.</strong><br>Only clips you choose to publish leave this Mac.</div>',unsafe_allow_html=True)
+
+if page=='channels':
+    import channel_watch_ui
+    if getattr(channel_watch_ui,'CHANNEL_FORM_API',0)<2:
+        import importlib
+        importlib.reload(channel_watch_ui)
+    from channel_watch_ui import show as show_channels
+    show_channels(ROOT,go)
+    st.stop()
+
+if page=='queue':
+    import queue_ui
+    if getattr(queue_ui,'QUEUE_FORM_API',0)<2:
+        import importlib
+        importlib.reload(queue_ui)
+    from queue_ui import show as show_queue
+    show_queue(ROOT,go)
+    st.stop()
+
+if page=='examples':
+    from example_library_ui import show as show_examples
+    show_examples(ROOT)
+    st.stop()
+
+if page=='before_after':
+    import before_after,before_after_ui
+    if getattr(before_after_ui,'BEFORE_AFTER_FORM_API',0)<2:
+        import importlib
+        importlib.reload(before_after);importlib.reload(before_after_ui)
+    from before_after_ui import show as show_before_after
+    show_before_after(ROOT,go)
+    st.stop()
+
+if page=='combine':
+    from combined_video_ui import show as show_combined_video
+    show_combined_video(ROOT)
+    st.stop()
 
 if page=='accounts':
     from social_ui import accounts_screen
@@ -95,14 +159,18 @@ if page=='source':
                 source=folder/('source'+Path(upload.name).suffix.lower())
                 if not source.exists():source.write_bytes(upload.getbuffer())
                 try:set_project(source,folder,upload.name)
-                except Exception as error:st.error(str(error))
+                except Exception as error:
+                    log_exception('app')
+                    st.error(str(error))
         else:
             link=st.text_input('YouTube video link',placeholder='Paste a watch or Shorts link…')
             if st.button('Find video',type='primary'):
                 st.session_state.pop('youtube_info',None)
                 try:
                     with st.spinner('Finding your video…'):st.session_state.youtube_info=lookup(link)
-                except Exception as error:st.error(f'Could not find the video: {error}')
+                except Exception as error:
+                    log_exception('app')
+                    st.error(f'Could not find the video: {error}')
             try:current,_=normalize_url(link)
             except ValueError:current=None
             info=st.session_state.get('youtube_info')
@@ -112,7 +180,9 @@ if page=='source':
                     status=st.empty()
                     try:
                         source,folder=download(info,status.info);set_project(source,folder,info['title'])
-                    except Exception as error:st.error(f'Import failed: {error}')
+                    except Exception as error:
+                        log_exception('app')
+                        st.error(f'Import failed: {error}')
             st.caption('Use videos you own or are permitted to download and edit. Internet is needed for YouTube imports and social publishing.')
     if st.button('Open my saved projects →'):go('library')
     st.stop()
@@ -126,6 +196,8 @@ if page=='library':
     notice=st.session_state.pop('deleted_project_notice',None)
     if notice:st.success(notice)
     all_projects=library(ROOT/'data')
+    from creator_profile import show as show_creator_profile
+    show_creator_profile(ROOT/'data')
     a,b,c=st.columns(3)
     a.markdown(stat_card('Projects',len(all_projects),'All your video projects','▱'),unsafe_allow_html=True)
     b.markdown(stat_card('Saved runs',sum(len(e['runs']) for e in all_projects),'Completed analysis runs','▷',True),unsafe_allow_html=True)
@@ -221,12 +293,22 @@ if page=='settings':
         min_clips=int(st.number_input('Minimum clips to aim for',min_value=1,value=max(1,int(previous.get('min_clips') or 3)),step=1)) if want_minimum else None
         st.caption('No maximum clip count. All suitable, non-overlapping clips are returned within your coverage setting. A minimum is a target, not a reason to add weak clips.')
         portrait=st.toggle('Vertical video · 9:16',value=previous.get('portrait',False))
-        shorts_editor=st.toggle('Edit speech into tighter Shorts',value=previous.get('shorts_editor',True),disabled=mode=='Sports') and mode!='Sports'
-        if shorts_editor:st.caption('Finds a strong opening, removes unnecessary phrases, and checks the ending locally. Uses the larger local editor in both processing modes. Reuses your transcript; other versions are created on request.')
+        shorts_editor=st.toggle('Keep complete ideas with AI',value=previous.get('shorts_editor',True),disabled=mode=='Sports') and mode!='Sports'
+        if shorts_editor:st.caption('Keeps the subject, useful explanation and conclusion. Includes the question when needed. Balanced edits favor complete sentences; a brief complete idea can still be short. Runs locally and reuses your transcript.')
+        from sound_analysis import installed as sound_installed
+        multimodal=st.toggle('Use speech, visuals & sound to choose clips',value=previous.get('multimodal_curation',sound_installed()))
+        if multimodal:
+            st.caption('Adds source-timed sound and sampled-frame evidence to genre-specific selection. Keeps all completeness checks. The heavier visual review covers a limited number of moments; this adds processing time.')
+            curation_windows=st.slider('Moments to review visually',1,6,int(previous.get('curation_windows',3)))
+            if not sound_installed():st.info('Sound classification needs one-time setup: .venv/bin/python setup_sound.py. Other evidence can still be reviewed.')
+        else:curation_windows=int(previous.get('curation_windows',3))
         st.caption('Portrait interviews default to automatic framing: a tighter person crop when suitable, otherwise the full picture over blurred video. Adjust the layout when reviewing.')
         with st.expander('Advanced settings · duration, coverage & models'):
+            editor_default=previous.get('editor_model') if previous.get('editor_model') in CHOICES else preferred_editor()
+            editor_model=st.selectbox('AI editor',CHOICES,index=CHOICES.index(editor_default),format_func=lambda key:LABELS[key],disabled=mode=='Sports')
+            if mode!='Sports':st.caption('Runs on this Mac. Qwen3.5 is available to compare; Qwen3 remains recommended after our saved-video checks. Changing editors reuses speech transcription and creates separate editing results.')
             minimum,maximum=st.slider('Preferred duration (seconds)',5,180,(previous['minimum'],previous['maximum']) if previous.get('mode')==mode else PROFILES[mode]['lengths'],step=5,key='duration-'+mode)
-            st.caption('Complete interviews can be shorter. Sports drafts may extend for context. Suggestions do not overlap.')
+            st.caption('AI keeps useful context toward this duration target. Complete brief ideas can be shorter; longer ideas must fit the maximum. Suggestions do not overlap.')
             coverage=st.slider('Maximum share of the source to keep (%)',10,100,int((previous.get('coverage',.35 if mode=='Sports' else 1.0) if previous.get('mode')==mode else (.35 if mode=='Sports' else 1.0))*100),step=5) / 100
             st.caption('100% permits every distinct topic; clips still cannot overlap. This is a ceiling, not a target.')
             semantic=st.checkbox('Review meaning with local AI',value=mode!='Sports',disabled=True)
@@ -243,16 +325,23 @@ if page=='settings':
     sentences=json.loads(transcript_path.read_text()).get('sentences',[]) if transcript_path.exists() else []
     if mode!='Sports' and football_hint(project['title'],sentences) and not interview_content(project['title'],sentences):st.warning('For on-field highlights, Sports mode reviews action. Interview mode follows the conversation.')
     if mode=='Sports' and interview_content(project['title'],sentences):st.info('For a sports interview, Interview mode is usually the better fit.')
-    settings=dict(resource_defaults=1,shorts_editor=shorts_editor,categories=categories,category_selection=selected,auto_mode=automatic,video_type=detection,coverage=coverage,mode=mode,minimum=minimum,maximum=maximum,min_clips=min_clips,portrait=portrait,semantic=semantic,vision=vision,windows=windows,quality=quality,scenes=scenes,speakers=speakers,alignment=alignment,sports_discovery_version=3)
+    settings=dict(resource_defaults=1,shorts_editor=shorts_editor,categories=categories,category_selection=selected,auto_mode=automatic,video_type=detection,coverage=coverage,mode=mode,minimum=minimum,maximum=maximum,min_clips=min_clips,portrait=portrait,semantic=semantic,vision=vision,windows=windows,quality=quality,scenes=scenes,speakers=speakers,alignment=alignment,sports_discovery_version=3,multimodal_curation=multimodal,curation_windows=curation_windows)
+    if mode!='Sports':settings['editor_model']=editor_model
     from project_store import write,read
     if read(folder/'ui-settings.json',{})!=settings:write(folder/'ui-settings.json',settings)
     st.caption(f'Estimated processing: about {clock(estimate_seconds(project,settings))}. Actual time varies with your Mac and video.')
-    ready=((TURBO/'.ready').exists() if quality=='Higher quality' else (SPEECH/'model.bin').exists()) and (not semantic or mode=='Sports' or ((EDITOR4 if shorts_editor or quality=='Higher quality' else EDITOR)/'.ready').exists()) and (mode!='Sports' or not vision or ((VISION4 if quality=='Higher quality' else VISION)/'.ready').exists())
+    ready=((TURBO/'.ready').exists() if quality=='Higher quality' else (SPEECH/'model.bin').exists()) and (not semantic or mode=='Sports' or installed(editor_model)) and (mode!='Sports' or not vision or ((VISION4 if quality=='Higher quality' else VISION)/'.ready').exists())
     if not ready:st.error('A required model is missing. Run Download Models.command first.')
     a,b=st.columns([1,2])
     if a.button('← Change video'):go('source')
     if b.button('Find my clips →',type='primary',disabled=not ready):
         st.session_state.settings=settings;(folder/'ui-settings.json').write_text(json.dumps(settings));go('processing')
+    if st.button('Add to video queue',disabled=not ready):
+        from queue_ui import add_project
+        try:
+            add_project(ROOT,project,settings,export_clips=True)
+        except (OSError,ValueError) as error:st.error(str(error))
+        else:go('queue')
     if mode=='Interview' and st.button('Compare the same moment'):
         st.session_state.settings=settings;go('compare')
     existing=analysis_path(project,settings)
@@ -274,12 +363,19 @@ if page=='processing':
         result=run_job(key,lambda update:analyze(project,settings,update),estimate_seconds(project,settings))
         st.session_state.result_path=result;go('complete')
     except Exception as error:
+        log_exception('app')
         st.error(f'Processing stopped: {error}')
         st.caption('Your video and completed transcript are saved. You can retry.')
         if st.button('Back to settings'):go('settings')
     st.stop()
 
 path=Path(st.session_state.result_path);candidates=json.loads(path.read_text())
+if page in ('complete','results','editor') and settings.get('shorts_editor') and settings['mode']!='Sports':
+    from shorts_context import SELECTION_TAG
+    if SELECTION_TAG+'-' not in path.name:
+        st.info('These are earlier suggestions. The updated AI keeps more explanation and checks complete ideas. Re-run this video to get new suggestions; your existing clips and edits stay saved.')
+        if st.button('Find fuller clips with updated AI',key='upgrade-selection-'+str(path)):
+            go('processing')
 if page=='complete':
     st.markdown('<div class="eyebrow">FIRST CUT, FINISHED</div>',unsafe_allow_html=True)
     st.title('Your moments are ready.' if candidates else 'No clear matches this time.')
@@ -290,6 +386,13 @@ if page=='complete':
     if settings['mode']=='Sports':
         from sports_report_ui import show_report
         show_report(path)
+    curation_report=json.loads(path.with_suffix('.diagnostics.json').read_text()).get('multimodal_curation') if path.with_suffix('.diagnostics.json').exists() else None
+    if curation_report:
+        with st.expander('Speech, visuals & sound review summary'):
+            st.write(f"Sound and genre evidence for {curation_report['total_moments']} moments; learned visual review for up to {curation_report['visual_moments']}.")
+            st.caption(f"Measured review time: {curation_report['seconds']:.1f}s. Reused reports retain their original time; it is not the current cache-read duration.")
+            for failure in curation_report['failures']:st.warning(failure)
+            st.caption('These are editing cues. Emotion analysis and analytics training are not used.')
     if settings['mode']!='Sports' and path.with_suffix('.diagnostics.json').exists():
         report=json.loads(path.with_suffix('.diagnostics.json').read_text())
         with st.expander('Why these clips?'):
@@ -309,11 +412,13 @@ if page=='complete':
     elif target:st.success(f'Minimum target reached: {len(candidates)} clips found (target {target}).')
     st.write('Open your collection, then choose a clip to preview and edit. Clips are rendered only when you open them.')
     if candidates and st.button('Open my clips →',type='primary'):go('results')
-    if not candidates:st.info('No topics passed within these settings. Inspect the selection report, increase the maximum duration, or use Balanced with manual review.')
+    if not candidates:st.info('No complete ideas passed within these settings. Review original moments in the selection report or increase the maximum duration.')
     if st.button('Adjust settings'):go('settings')
     st.stop()
 
 if page=='results':
+    from project_store import read
+    report_words=read(transcript_file(folder,settings),{}).get('words',[])
     st.markdown('<div class="eyebrow">CLIP COLLECTION</div>',unsafe_allow_html=True)
     st.title('Your moments.')
     from clip_usage import is_used
@@ -322,6 +427,7 @@ if page=='results':
     a.metric('Clips',len(candidates));b.metric('Ready to use',len(candidates)-used_count);c.metric('Used',used_count)
     show_used=st.radio('Show clips',['All','Unused','Used'],horizontal=True)
     clip_search=st.text_input('Search clips',placeholder='Find a title or spoken phrase…').strip().lower()
+    if st.button('Combine saved clips into a video'):go('combine')
     if st.button('← Overview'):go('complete')
     visible=0
     for i,c in enumerate(candidates):
@@ -337,7 +443,15 @@ if page=='results':
             with right:usage_checkbox(folder,path,c,'list')
             left.subheader(c['title'])
             if c.get('audience_quality'):left.caption(c['audience_quality']['reason'])
+            with left:
+                from multimodal_ui import show as show_curation
+                show_curation(c)
             left.write(c['text'][:150]+('…' if len(c['text'])>150 else ''))
+            with left.expander('Suggested edit assessment'):
+                from final_package import editorial_assessment
+                from edit_timeline import ranges_for,remap_words
+                st.dataframe(editorial_assessment(c,remap_words(report_words,ranges_for(c)),ranges_for(c),settings['mode']),hide_index=True,width='stretch')
+                st.caption('Suggested edit only; saved manual changes and alternate versions are assessed when opened. Unknown dimensions remain unscored.')
             if right.button('Review clip →',key=f'open-{i}'):
                 st.session_state.clip_index=i;go('editor')
     if not visible:st.info('No clips match these filters.')
@@ -345,14 +459,14 @@ if page=='results':
 
 if page=='editor':
     if st.button('← All clips'):go('results')
-    index=st.session_state.clip_index;candidate=candidates[index]
+    index=st.session_state.clip_index;candidate=dict(candidates[index]);usage_candidate=dict(candidate)
     st.caption(f'CLIP {index+1:02} OF {len(candidates):02}')
-    candidate=dict(candidate)
-    usage_candidate=dict(candidate)
+    heading=st.empty();preview=st.container()
+    edit_tab,look_tab,post_tab,advanced_tab=st.tabs(['Edit','Look','Social media','Advanced'],key='clip-editor-tab-'+str(path)+'-'+str(index),on_change='rerun')
     transcript_path=transcript_file(folder,settings);transcript=json.loads(transcript_path.read_text())
     base_edit_id=f"{candidate['start']}-{candidate['end']}"
-    from shorts_ui import choose_edit,decisions
-    candidate,variant=choose_edit(folder,path,candidate,transcript,settings)
+    from shorts_ui import choose_edit
+    with edit_tab:candidate,variant=choose_edit(folder,path,candidate,transcript,settings)
     candidate=dict(candidate)
     edits_path=path.with_suffix('.edits.json');edits=json.loads(edits_path.read_text()) if edits_path.exists() else {}
     edit_id=base_edit_id+(':'+variant if variant!='Original moment' else '')
@@ -360,117 +474,217 @@ if page=='editor':
         manual_start,manual_end=edits[edit_id]
         candidate.update(passed=False,text=' '.join(w['text'] for w in transcript['words'] if w['end']>manual_start and w['start']<manual_end),reason='Manual source boundaries need review; automatic checks apply to the suggested edit.')
         for key in ('audience_review','audience_quality'):candidate.pop(key,None)
-    decisions(candidate)
     original_title=candidate['title']
     if settings['mode']=='Interview' and not candidate.get('edit_plan'):
         from interview_integrity import topic_title
         candidate['title']=topic_title(candidate['text'])
-    st.title(candidate['title'])
-    from audience_quality import show_report as show_audience_report
-    show_audience_report(candidate)
-    from clip_usage import checkbox as usage_checkbox
-    usage_checkbox(folder,path,usage_candidate,'editor')
-    st.caption('Transcript review only; visual completeness is not guaranteed.' if candidate['passed'] else 'Draft · Review the opening and ending before sharing.')
+    heading.title(candidate['title'])
     start,end=edits.get(edit_id,[candidate['start'],candidate['end']])
     active_plan=candidate.get('edit_plan') if edit_id not in edits else None
+    comparison_candidate=dict(candidate,edit_plan=active_plan or {})
     render_ranges=active_plan['ranges'] if active_plan else None
-    if candidate.get('edit_plan'):st.caption('Applying manual start/end boundaries exports a continuous source range. Restore suggested boundaries to return to this edited version.')
-    from boundary_editor import editor as boundary_editor
-    changed=boundary_editor(source,total,start,end,transcript,str(path)+edit_id)
-    reset=st.button('Restore suggested boundaries',key='restore-'+str(path)+edit_id)
-    if changed is not None or reset:
-        s,e=(candidate['start'],candidate['end']) if reset else changed
-        if not 0<=s<e<=total:st.error('The end must follow the start, within the source video. The previous cut is kept.')
-        else:
-            from project_store import write
-            if reset:edits.pop(edit_id,None)
-            else:edits[edit_id]=[s,e]
-            write(edits_path,edits);st.rerun()
-    for other in candidates:
-        oid=f"{other['start']}-{other['end']}";s,e=edits.get(oid,[other['start'],other['end']])
-        from modes import intersection
-        current=dict(candidate,start=start,end=end,edit_plan=active_plan or {})
-        if oid!=base_edit_id and intersection(current,dict(other,start=s,end=e))>0:st.warning('Your cut overlaps another suggestion.');break
+    from project_store import read,write
+    import ending_review,ending_ui
+    if getattr(ending_ui,'ENDING_FORM_API',0)<3:
+        import importlib
+        importlib.reload(ending_review);importlib.reload(ending_ui)
+    from ending_review import context as ending_context,applied as applied_ending
+    ending_path=path.with_suffix('.endings.json');ending_selections=read(ending_path,{})
+    ending_data=None;ending_problem=''
+    if settings['mode']!='Sports':
+        try:
+            opening=read(path.with_suffix('.styles.json'),{}).get(edit_id,{}).get('title',candidate['title'])
+            ending_data=ending_context(ROOT,transcript,render_ranges or [dict(start=start,end=end)],total,settings,opening,
+                str(source)+':'+str(source.stat().st_mtime_ns))
+        except ValueError as error:ending_problem=str(error)
+    selected_ending=applied_ending(ending_selections.get(edit_id),ending_data) if ending_data else None
+    if selected_ending:
+        render_ranges=selected_ending['ranges'];start,end=render_ranges[0]['start'],render_ranges[-1]['end']
+        candidate.update(start=start,end=end,text=selected_ending['final_transcript'])
+        for field in ('audience_review','audience_quality'):candidate.pop(field,None)
+        if active_plan:
+            reviewed_ranges=[]
+            for i,r in enumerate(render_ranges):
+                original=active_plan['ranges'][i]
+                role=('hook_payoff' if len(render_ranges)==1 else 'payoff') if i==len(render_ranges)-1 else original['role']
+                reviewed=dict(r,role=role,reason=selected_ending['reason'] if i==len(render_ranges)-1 else original['reason'])
+                if r['end']<original['end']:
+                    for field in ('first_unit','last_unit'):reviewed.pop(field,None)
+                reviewed_ranges.append(reviewed)
+            active_plan=dict(active_plan,ranges=reviewed_ranges,hook_range=reviewed_ranges[0],payoff_range=reviewed_ranges[-1],
+                context_ranges=[r for r in reviewed_ranges if r['role']=='context'],final_transcript=selected_ending['final_transcript'],
+                recommended_duration=selected_ending['duration'],ending_review=selected_ending,
+                reason_for_each_cut=[r['reason'] for r in reviewed_ranges],
+                standalone_context_check=dict(passed=True,reason=selected_ending['source_check'].get('reason',selected_ending['reason'])),
+                removed_ranges=active_plan['removed_ranges']+selected_ending['removed_ranges'])
+            candidate['edit_plan']=active_plan
+    with edit_tab:
+        from clip_usage import checkbox as usage_checkbox
+        usage_checkbox(folder,path,usage_candidate,'editor')
+        st.caption('Transcript review only; listen and review visual content before posting.' if candidate['passed'] else 'Draft · Review the opening and ending before sharing.')
+        updated,apply_ending=ending_ui.ending_form(folder,ending_data,selected_ending,str(path)+edit_id,ending_problem)
+        if apply_ending:
+            if updated is None:ending_selections.pop(edit_id,None)
+            else:ending_selections[edit_id]=updated
+            write(ending_path,ending_selections);st.rerun()
+        if candidate.get('edit_plan'):st.caption('Applying manual start/end boundaries exports a continuous source range. Restore suggested boundaries to return to this edited version.')
+        from boundary_editor import editor as boundary_editor
+        changed=boundary_editor(source,total,start,end,transcript,str(path)+edit_id)
+        reset=st.button('Restore suggested boundaries',key='restore-'+str(path)+edit_id)
+        if changed is not None or reset:
+            s,e=(candidate['start'],candidate['end']) if reset else changed
+            if not 0<=s<e<=total:st.error('The end must follow the start, within the source video. The previous cut is kept.')
+            else:
+                from project_store import write
+                if reset:edits.pop(edit_id,None)
+                else:edits[edit_id]=[s,e]
+                if edit_id in ending_selections:
+                    ending_selections.pop(edit_id);write(ending_path,ending_selections)
+                write(edits_path,edits);st.rerun()
+        for other in candidates:
+            oid=f"{other['start']}-{other['end']}";s,e=edits.get(oid,[other['start'],other['end']])
+            from modes import intersection
+            current=dict(candidate,start=start,end=end,edit_plan=active_plan or {})
+            if oid!=base_edit_id and intersection(current,dict(other,start=s,end=e))>0:st.warning('Your cut overlaps another suggestion.');break
     from polish_ui import caption_editor
-    export_words=caption_editor(folder,transcript_path,transcript,start,end,ranges=render_ranges)
+    with look_tab:export_words=caption_editor(folder,transcript_path,transcript,start,end,ranges=render_ranges)
     from presentation import LAYOUTS,normalize_layout,default_layout
-    style_path=path.with_suffix('.styles.json')
-    styles=json.loads(style_path.read_text()) if style_path.exists() else {}
-    style=styles.get(edit_id,dict(layout=default_layout(settings.get('portrait',False)),burn=True,title=candidate['title'] if active_plan or not candidate.get('edit_plan') else '',position=.5,second=.75))
+    from project_store import read,write
+    style_path=path.with_suffix('.styles.json');styles=read(style_path,{})
+    from queue_exports import default_style,render_identity
+    style=styles.get(edit_id,default_style(settings))
     if settings['mode']=='Interview' and not active_plan and style.get('title')==original_title:style=dict(style,title=candidate['title'])
     style=dict(style,layout=normalize_layout(style['layout']))
-    with st.expander('Layout, captions & title'):
-        with st.form('style-'+str(path)+edit_id):
-            layout=st.selectbox('Video layout',LAYOUTS,index=LAYOUTS.index(style['layout']))
-            burn=st.checkbox('Burn highlighted captions into the video',value=style.get('burn',True))
-            title=st.text_input('Opening title · leave blank to hide',value=style.get('title',''),max_chars=100)
-            trim_edges=st.checkbox('Trim verified quiet edges · up to 0.3 seconds per edge',value=style.get('trim_edges',False) and not bool(render_ranges),disabled=bool(render_ranges))
-            st.caption('Off by default. Keeps a speech margin and never removes internal pauses or changes the saved suggestion.')
-            position=st.slider('Speaker crop position / top speaker',0.,1.,float(style.get('position',.5)),step=.05)
-            second=st.slider('Bottom speaker position',0.,1.,float(style.get('second',.75)),step=.05)
-            st.caption('Automatic framing for every video type tries clear full-screen crops first, then uses blur when the sampled subject cannot safely fit. Existing 9:16 footage keeps its framing. Sports action and group scenes keep the wider picture when a safe crop is uncertain. It samples faces rather than tracking the ball or every moving object, so review the result. Sliders apply only to manual speaker crops. Full picture has blurred video behind it, never added black padding.')
-            if st.form_submit_button('Apply style'):
-                styles[edit_id]=dict(layout=layout,burn=burn,title=title,position=position,second=second,trim_edges=trim_edges)
-                style_path.write_text(json.dumps(styles));st.rerun()
+    with edit_tab:
+        if st.button('Compare before and after',help='Review a copy of this saved moment. Your selected edit and posting text are kept.'):
+            baseline_ranges=ending_data['ranges'] if selected_ending else comparison_candidate['edit_plan'].get('ranges')
+            if not baseline_ranges:
+                a,b=edits.get(edit_id,[comparison_candidate['start'],comparison_candidate['end']])
+                baseline_ranges=[dict(start=a,end=b)]
+            from final_package import get_package
+            baseline_package=get_package(folder,source,comparison_candidate,export_words,baseline_ranges,settings['mode'])
+            baseline_opening=baseline_package['hook'] if style.get('opening_hook_key') or 'title' not in style else style['title']
+            baseline_posting=read(folder/'platform-posts-v517.json',{}).get(baseline_package['fingerprint'],{}).get('YouTube Shorts') or dict(title=original_title,description='')
+            st.session_state.before_after_pending=dict(root=str(ROOT),project=project,transcript=str(transcript_path),ranges=baseline_ranges,
+                mode=settings['mode'],editor_model='qwen3-4b',opening_text=baseline_opening,caption_words=export_words,
+                layout='Original' if style['layout']==LAYOUTS[0] else LAYOUTS[1],
+                posting=baseline_posting,name=project['title']+' · '+original_title)
+            go('before_after')
     render_start,render_end=start,end
     if style.get('trim_edges') and not render_ranges:
         from polish import silent_edges
         @st.cache_data(show_spinner=False)
         def edge_times(file,mtime,a,b,words):return silent_edges(file,a,b,words)
         render_start,render_end=edge_times(str(source),source.stat().st_mtime_ns,start,end,transcript['words'])
-        st.caption(f'Quiet-edge adjustment: {start:.2f}–{end:.2f}s → {render_start:.2f}–{render_end:.2f}s. Saved boundaries are unchanged.')
-    render_signature=[digest,source.stat().st_mtime_ns,transcript_path.stat().st_mtime_ns,render_start,render_end,style,export_words]
-    render_signature+=([render_ranges,'v516'] if render_ranges else ['v55'])
-    render_id=hashlib.sha256(json.dumps(render_signature).encode()).hexdigest()[:24]
-    manifest=folder/f'render-{render_id}.json'
-    video=None
-    download_area=None
+        with edit_tab:st.caption(f'Quiet-edge adjustment: {start:.2f}–{end:.2f}s → {render_start:.2f}–{render_end:.2f}s. Saved boundaries are unchanged.')
+    final_ranges=render_ranges or [dict(start=render_start,end=render_end)]
+    from final_package import get_package
+    final_candidate=dict(candidate,edit_plan=active_plan or {})
+    package=get_package(folder,source,final_candidate,export_words,final_ranges,settings['mode'],read(folder/'confirmed-names.json',[]))
+    if 'title' not in style:style['title']=package['hook']
+    from edit_timeline import remap_words,timeline_duration
+    final_words=remap_words(export_words,final_ranges)
+    import packaging_ui
+    # An already-running server can retain older posting controls.
+    if getattr(packaging_ui,'POST_FORM_API',0)<6 or not getattr(packaging_ui,'OPENING_HOOK_API',0):
+        import importlib
+        importlib.reload(packaging_ui)
+    from packaging_ui import look_form,post_form,advanced
+    with look_tab:
+        import opening_ui
+        if not getattr(opening_ui,'OPENING_FORM_API',0):
+            import importlib,opening_hooks
+            importlib.reload(opening_hooks);importlib.reload(opening_ui)
+        from opening_ui import opening_form
+        updated,apply=opening_form(ROOT,folder,package,final_words,settings,style,str(path)+edit_id)
+        if apply:styles[edit_id]=updated;write(style_path,styles);st.rerun()
+        updated,apply=look_form(style,package,final_words,settings['mode'],str(path)+edit_id,ranged=bool(render_ranges))
+        if apply:styles[edit_id]=updated;write(style_path,styles);st.rerun()
+    render_style=dict(style)
+    if style.get('packaging_version'):
+        render_style['_emphasis']=package['emphasis']
+        if style['layout']==LAYOUTS[4]:
+            from visual_pacing import inspect_scene,plan_camera
+            try:
+                if settings['mode']=='Sports':
+                    import av
+                    with av.open(str(source)) as media:scene=dict(width=media.streams.video[0].width,height=media.streams.video[0].height,samples=[])
+                else:scene=inspect_scene(source,final_ranges)
+                render_style['_visual_plan']=plan_camera(scene,final_words,final_ranges,package,style,settings['mode'])
+            except Exception as error:
+                log_exception('app')
+                with look_tab:st.warning('Automatic camera planning was unavailable; using full picture. '+str(error))
+                render_style['layout']=LAYOUTS[1]
+    render_id=render_identity(folder,source,transcript_path,render_start,render_end,render_style,export_words,final_ranges,package,render_ranges)
+    manifest=folder/f'render-{render_id}.json';video=None;download_area=None
     try:
-        saved=json.loads(manifest.read_text()) if manifest.exists() else []
+        saved=read(manifest,[])
         if len(saved)==2 and all(Path(p).is_file() for p in saved):video,captions=map(Path,saved)
         else:
             def render(update):
                 update(.05,'Rendering the selected clip')
-                return export_clip(source,render_start,render_end,export_words,settings.get('portrait',False),presentation=style,ranges=render_ranges)
-            video,captions=run_job('render-'+render_id,render,max(15,(end-start)*2))
-            manifest.write_text(json.dumps([str(video),str(captions)]))
-        if video.with_suffix('.framing.json').exists():st.caption(json.loads(video.with_suffix('.framing.json').read_text())['reason'])
-        from edit_timeline import timeline_duration
-        st.video(str(video));st.caption(f'{clock(timeline_duration(render_ranges) if render_ranges else render_end-render_start)} · Extracted clip starts at 0:00')
-        download_area=st.container()
-    except Exception as error:st.error(f'Could not render the clip: {error}')
-    # Platform-required fields remain editable in the publishing form; no writing model runs here.
-    posting_copy=candidate.get('publishing',dict(title=candidate['title'],description='')) if active_plan else dict(title=candidate['title'],description='')
-    if active_plan:
-        with st.expander('Posting text from this edit'):
-            st.code(posting_copy['title'],language=None)
-            st.write(posting_copy['description'])
-    elif candidate.get('edit_plan'):
-        candidate=dict(candidate,text=' '.join(w['text'] for w in transcript['words'] if w['end']>render_start and w['start']<render_end),passed=False)
-    if video is not None and video.is_file():
-        if download_area is not None:
-            from download_names import clip_filename
-            download_title=posting_copy.get('title') or candidate['title']
-            with download_area:
-                a,b=st.columns(2)
-                a.download_button('↓ Save video',video.read_bytes(),clip_filename(download_title),'video/mp4',type='primary')
-                if captions.read_text().strip():b.download_button('↓ Save subtitles',captions.read_bytes(),clip_filename(download_title,'srt'),'text/plain')
-                st.caption('Download name: '+clip_filename(download_title))
-        from clip_thumbnails import show as show_thumbnails
-        show_thumbnails(video,folder,candidate['title'])
-        from social_ui import composer
-        composer(folder,path,candidate,video,render_id,posting_copy)
-    review_details=dict(quality=settings.get('quality','Balanced'),start=start,end=end)
+                return export_clip(source,render_start,render_end,export_words,settings.get('portrait',False),presentation=render_style,ranges=render_ranges,
+                                   progress=lambda p,label:update(.05+.94*p,label))
+            video,captions=run_job('render-'+render_id,render,max(15,timeline_duration(final_ranges)*2))
+            write(manifest,[str(video),str(captions)])
+        with preview:
+            st.video(str(video));st.caption(f'{clock(timeline_duration(final_ranges))} · Extracted clip starts at 0:00')
+            download_area=st.container()
+        from combined_video import register_clip
+        finished_clip=register_clip(folder,video,captions,style.get('title') or candidate['title'],project['title'])
+        finished_clip['duration']=timeline_duration(final_ranges)
+        with edit_tab:
+            if st.button('Add to combined video'):
+                from combined_video_ui import add_to_draft
+                add_to_draft(ROOT,finished_clip);go('combine')
+        with look_tab:
+            decision=read(video.with_suffix('.framing.json'),{})
+            if decision.get('reason'):st.caption(decision['reason'])
+            for warning in decision.get('warnings',[]):st.warning(warning)
+    except Exception as error:
+        log_exception('app')
+        with preview:st.error(f'Could not render the clip: {error}')
+    with post_tab:
+        posting_copy=post_form(folder,package,settings,active=post_tab.open)
+        if posting_copy.get('title'):
+            from social_copy import TAG
+            heading.title(TAG.sub('',posting_copy['title']).strip())
+        if video is not None and video.is_file():
+            if download_area is not None:
+                from download_names import clip_filename
+                download_title=posting_copy.get('title') or candidate['title']
+                with download_area:
+                    a,b=st.columns(2)
+                    a.download_button('↓ Save video',video.read_bytes(),clip_filename(download_title),'video/mp4',type='primary')
+                    if captions.read_text().strip():b.download_button('↓ Save subtitles',captions.read_bytes(),clip_filename(download_title,'srt'),'text/plain')
+                    st.caption('Download name: '+clip_filename(download_title))
+            from clip_thumbnails import show as show_thumbnails
+            show_thumbnails(video,folder,style.get('title') or package['hook'])
+            from social_ui import composer
+            composer(folder,path,final_candidate,video,render_id,posting_copy)
+    review_details=dict(quality=settings.get('quality','Balanced'),start=start,end=end,
+        visual_pacing=style.get('pacing','Off'),entities=package['entities'],final_transcript=package['final_transcript'])
     if render_ranges:review_details.update(variant=variant,ranges=render_ranges)
-    review_form(folder,str(path),review_details)
-    review_history(folder)
-    with st.expander('Transcript & review notes'):
-        st.write(candidate['text']);st.write(candidate.get('reason','Original discovered moment.'))
-        if candidate.get('concern'):st.warning(candidate['concern'])
-        for note in candidate.get('boundary_notes',[]):st.caption(note)
-        if candidate.get('storyboard') and Path(candidate['storyboard']).exists():st.image(candidate['storyboard'])
-    with st.expander('Watch surrounding context'):
-        st.video(str(source),start_time=float(max(0,start-5)),end_time=float(min(total,end+5)))
-    with st.expander('Full transcript'):
-        for sentence in transcript['sentences']:st.write(f"{sentence['start']:.1f}s · {sentence.get('speaker') or 'Speech'} · {sentence['text']}")
-        st.download_button('Save transcript',transcript_path.read_bytes(),'transcript.json','application/json')
+    if active_plan:
+        original=active_plan['source_moment'];review_details['removed_fraction']=max(0,1-timeline_duration(final_ranges)/(original['end']-original['start']))
+        from interview_integrity import question
+        review_details['answer_only']=question(original['text'].split('?')[0]+'?') and not question(package['sentences'][0]['text']) if '?' in original['text'] and package['sentences'] else None
+    with edit_tab:review_form(folder,str(path),review_details)
+    with advanced_tab:
+        advanced(package,final_candidate,final_words,final_ranges)
+        from multimodal_ui import review_form as curation_form
+        curation_candidate=dict(final_candidate,text=package['final_transcript'],edit_plan=dict(ranges=final_ranges))
+        curation_form(project,transcript,curation_candidate,settings)
+        from audience_quality import show_report as show_audience_report
+        show_audience_report(final_candidate)
+        review_history(folder)
+        with st.expander('Transcript & review notes'):
+            st.write(package['final_transcript']);st.write(candidate.get('reason','Original discovered moment.'))
+            if candidate.get('concern'):st.warning(candidate['concern'])
+            for note in candidate.get('boundary_notes',[]):st.caption(note)
+            if candidate.get('storyboard') and Path(candidate['storyboard']).exists():st.image(candidate['storyboard'])
+        with st.expander('Watch surrounding context'):
+            st.video(str(source),start_time=float(max(0,start-5)),end_time=float(min(total,end+5)))
+        with st.expander('Full transcript'):
+            for sentence in transcript['sentences']:st.write(f"{sentence['start']:.1f}s · {sentence.get('speaker') or 'Speech'} · {sentence['text']}")
+            st.download_button('Save transcript',transcript_path.read_bytes(),'transcript.json','application/json')

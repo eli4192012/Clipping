@@ -1,4 +1,5 @@
 """Serialized publishing, durable checkpoints and read-only recovery checks."""
+from app_logging import log_exception
 import fcntl
 import time
 from contextlib import contextmanager
@@ -120,12 +121,14 @@ def publish(draft_id,update=lambda *args:None,expected_updated=None):
         store.claim(draft_id,draft['updated'])
         try:token=auth.access(account)
         except Exception:
+            log_exception('social_publish')
             store.save(draft) # No upload request has happened; restore the editable state.
             raise
         try:
             if draft['platform']=='youtube':youtube_upload(draft,account,token,update)
             else:instagram_upload(draft,account,token,update)
         except Exception:
+            log_exception('social_publish')
             if draft['status']!='Published':checkpoint(draft,status='Needs check',error='The outcome needs checking. Use Check status; do not create another post until you check the destination.')
             raise auth.SocialError('Upload interrupted or refused. Your attempt is saved. Use Check status before taking another action.') from None
         return draft

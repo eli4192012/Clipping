@@ -1,3 +1,165 @@
+# v5.35 · Connect channels for automatic clipping
+
+- Adds **YouTube channels** in the sidebar: connect a public channel or @handle and start watching without a Google sign-in or API key. Defaults to the Colts channel, vertical clips with captions and Automatic per upload. It reuses the full transcript and existing local detector to choose Interview, Podcast or Sports; fixed or saved settings are also available. Detection still needs review.
+- Checks about every five minutes and queues regular uploads from the last **48 hours**, plus the newest finished upload if older. Reads the latest 50 uploads from the Videos tab; skips Shorts/live tabs and unfinished videos. Full video metadata supplies the publication time. Queued sources are checked again before download so old videos can be skipped.
+- Uses the existing serial queue for download, local transcription, AI cuts and exports. Saved video IDs prevent repeated jobs after completion, failure, removal or restart. Frozen settings, retained caches, retry controls, history and visible errors make unattended work reviewable.
+- Adds **Pause watching**, **Resume watching**, **Check now** and actual upload/queue status. New uploads respect a paused queue; a naturally emptied queue restarts for new arrivals. Watches survive browser closure and resume when the app is reopened after a shutdown. The Mac must remain powered on, awake and online; normal watching does not bypass lid sleep.
+- Nothing is published automatically. Local AI/editor rules, model weights and the analysis-cache VERSION are unchanged. See [validation](V535_VALIDATION.md).
+
+# v5.34 · Your preferred title tags and clip-title references
+
+- New AI titles always include **#fyp**. Colts titles reserve **#Colts #NFL #Football #fyp**, using speech or saved source title/publisher context. Supported player/topic tags can be added when they fit the 100-character title limit; mandatory tags are never silently dropped.
+- Adds saved Good pattern clip titles and approved title rewrites to local writing-style retrieval alongside the PDF examples. Your approved Buck/Tommy rewrite is saved on this Mac. References guide phrasing, while the source checker still sees only final speech and generated copy.
+- Keeps earlier copy caches, manual text, reviewed posting drafts, videos, transcripts and exports. The version badge is v5.34; no model weights, analysis-cache version or app runtime dependencies change. See [validation](V534_VALIDATION.md).
+
+# v5.33 · A local Indy Audible posting style
+
+- Adds a private local title/description/hashtag reference built from the supplied PDF. All 63 posts and the original PDF are archived; 56 references are eligible after filtering copied speech, generic descriptions and conflicting years/outcomes. No model weights change or performance learning is claimed.
+- Selects up to three related examples per clip and shows the writing-style count in **Social media**. Distinct headline approaches replace forced questions; descriptions can use one or two natural sentences. Entity/topic tags replace arbitrary spoken-word tag suggestions and remain inside the title.
+- Keeps historical examples out of the factual checker. Adds guards for imported numbers/dates and unstated confidence, resilience, chemistry or sharpness, plus exact source-phrase IDs for evidence. A bounded repair remains available; failed generations preserve existing text.
+- Profile fingerprints isolate posting caches when examples change. Earlier AI copy, manual text, reviewed publishing drafts, clips, source videos, transcripts, analyses and model weights remain saved. All processing and the example corpus stay local; the corpus is excluded from Git. See [validation](V533_VALIDATION.md).
+
+# v5.32 · Optional closed-lid clipping with Amphetamine
+
+- Adds **Allow lid-closed processing with Amphetamine** before starting waiting queue videos. Requires the free Mac App Store utility and a connected charger. First-use macOS Automation and Amphetamine closed-display prompts must be completed before closing the lid.
+- Uses a temporary, screen-sleep-allowed session with a 24-hour limit. An independent local watcher ends the queue's session on completion, pause or runner exit, checks charger/mode availability, and lets remaining videos pause after the current video if support is lost. Existing active Amphetamine sessions are not replaced; differently timed replacement sessions are not ended.
+- Shows setup/active/error messages and rejects an unavailable charger before starting. Failed setup leaves videos waiting. A stale/dead watcher cannot keep reporting an active mode. Automatic app recovery uses normal lid-open processing until closed-lid mode is selected again.
+- Clipping makes no privileged helper, sudo or persistent power-setting changes. Transcription, selection, rendering and existing files remain local and unchanged. Automated behavior and script compilation are verified; physical lid-closed operation remains unverified on this Mac. See [validation](V532_VALIDATION.md).
+
+# v5.31 · A queue that keeps clipping while you step away
+
+- Adds **Video queue** in the sidebar, multi-project selection and **Add to video queue** in project setup. Each entry snapshots its source and clip settings. Start once to find and automatically export each video's selected clips before moving to the next video.
+- Adds waiting-item reorder/removal, pause after the current video, live stage progress, finished results and retry controls. Duplicate active entries are skipped; failures keep completed files and let the next video continue. Queued projects cannot be deleted until removed or finished.
+- Runs in a separate local process with a saved SQLite queue, exclusive runner election and the existing heavy-job lock. Browser navigation/closure does not stop work. Reopening the app resumes interrupted active work; paused queues stay paused. Model/FFmpeg children inherit the heavy-job lock so recovery cannot overlap a surviving worker.
+- Exports suggestions with default studio captions/framing, uses saved caption corrections, indexes finished clips for Combine clips and shares existing editor render keys. Successful exports are reused on retry and when opened. Prior manual edits, source videos, transcripts, analyses and exports remain saved; nothing is published automatically.
+- Holds a temporary macOS idle-sleep assertion only while the runner is alive. Closing the lid, manual sleep or shutdown can still interrupt processing. Analysis timing remains an estimate; export time is additional. The analysis-cache version and editorial selection rules are unchanged. See [validation](V531_VALIDATION.md).
+
+# v5.30 · Clips that keep a complete idea
+
+- Changes Balanced selection from “the shortest explanation” to the subject, useful explanation and conclusion. Uses your preferred duration as a target while allowing genuinely brief complete ideas. Keeps the question when needed and retains the one-question interview limit.
+- Keeps whole sentences and completes speech split across transcript pauses. Restores explanation removed by aggressive internal cuts. Balanced internal deletions are limited to clear acknowledgements, literal repetition and discussion references; Fast remains an optional shorter edit.
+- Improves interview source boundaries: keeps named setup, separates actual questions from lowercase continuations, excludes moderator transitions and counts a detected confirmation even when Whisper omitted its question mark.
+- Adds final-speech evidence for the subject, explanation and conclusion, plus an explicit check that any kept question is answered. Rejects incomplete endings, unnamed-person openings, reporter-only setups and unverified edits in both processing modes. Current structural guards also run on cached edits. One bounded repair can fix a rejected plan or invalid evidence references; every final check still has to pass. Original moments remain available in the selection report.
+- Adds **Find fuller clips with updated AI** to older results. Reuses the transcript, saves a separate analysis and leaves prior clips, manual edits and exports available. New editor/review/timing cache identities reflect the changed work without changing transcription caches or `modes.VERSION`.
+- All processing stays local with the installed AI editor. Full regression tests and saved-video validation are documented in [validation](V530_VALIDATION.md). Longer kept speech and more detailed checking can increase processing and rendering time; fewer clips may pass.
+
+# v5.29 · Reliable installs, exports and diagnostics
+
+- Fixes the pinned install list: Keychain support, scene detection and higher-quality MLX transcription now include all required packages. Uses the working local versions and checks direct constraints plus native imports in a clean environment.
+- Shows actual encoding progress for individual clips as well as combined videos. A wall-clock watchdog works even when FFmpeg stops producing output; failures stop and reap the process and remove the new partial video. Earlier exports remain available. Caption paths with spaces, apostrophes and punctuation are escaped consistently.
+- Keeps private, rotating local diagnostics in `work/logs/app.log`. Failed jobs and UI actions record exception types and call locations; worker traceback locations survive temporary-folder cleanup. Account/provider messages and transcripts are excluded from general logs. FFmpeg diagnostics are bounded and redact URLs and token fields.
+- Adds GitHub Actions on Apple Silicon: a fresh pinned install, dependency/import checks, scoped first-party lint and the regression suite, including real video/audio/caption exports. Vendored code, model weights and personal media are excluded from the checks' source requirements.
+- Validates analysis controls without rewriting saved settings; shares the existing timing key between estimate reads and writes and tolerates damaged timing history. Binds loop callbacks explicitly and removes an unused import. All 51 saved settings/run combinations checked retain their original analysis paths; the analysis-cache VERSION remains unchanged.
+- Updates the README for the public repository and development branch. All transcription, inference and editing stay local. **348 tests passed** on this Mac; see [validation](V529_VALIDATION.md). This release improves reliability and diagnostics; editorial quality and model-speed changes remain separate work.
+
+# v5.28 · Local speech, visual and sound curation
+
+- Adds **Use speech, visuals & sound to choose clips** in project settings. Reuses speech editing, then combines local sound classification and sampled-frame observations before final moment selection. Choose 1–6 moments for heavier visual review, default 3.
+- Uses Google's local YAMNet for speech/music/reaction sounds, the installed Qwen3-VL 4B for three retained-source frames per selected moment, and a cached motion/camera-change scan. Interview, Podcast, Sports, Music and Gaming presets apply different supporting weights. Emotion inference and analytics training remain deferred.
+- Makes only small priority adjustments. Existing source checks, complete endings and the one-question interview limit take precedence. Missing models, failed responses and detected visual contradictions remain unavailable or uncertain; motion cannot approve a completed sports play.
+- Shows **Speech, visuals & sound evidence**, with actual source frames/timestamps, sound windows, weights, failures and downloadable JSON. **Advanced → Review this moment with speech, visuals & sound** reviews an existing final cut on demand without changing its edits, captions, posting text or export.
+- Installs the small sound model in a separate pinned TensorFlow environment using `setup_sound.py`; sound setup is completed on this Mac. Inference stays local and serial, reuses transcripts, and caches source and cut evidence independently. The main MLX dependencies and analysis-cache VERSION stay unchanged.
+- **330 tests passed**, plus real trials across four moments in three saved videos, cache reopening without workers, and live app evidence checks. The first small-model attempt was unreliable; final curation uses 4B. The observed priority change does not establish better clips, audience gains or parity with a commercial service. See [validation](V528_VALIDATION.md).
+
+# v5.27 · Before-and-after comparisons
+
+- Adds **Before & after** in the sidebar and **Edit → Compare before and after** for a saved moment. Play real pairs, inspect opening/posting text and final thoughts, download reports and save your own preference and notes.
+- Uses the same source, transcript, fixed discovery cut and rendering profile for both sides. Reviews a copy in opening → ending → final-cut opening check → posting order. Existing project edits, publishing drafts, transcripts and exports are kept.
+- Reuses local transcription, model decisions and renders. Stage times distinguish fresh work from cache reads. Failed steps are shown; no suggestion is automatically applied or published. Earlier runs and failures stay available.
+- Compares four saved moments and exposes mixed results, including local self-checks accepting inaccurate headline wording. Shorter duration or a model's approval is not counted as proof of better quality. See [validation](V527_VALIDATION.md).
+- Fixes a false two-question rejection when one unfinished comma-ended question continues across a short pause. Completed questions, voice changes and explicit multiple questions remain separate. The analysis-cache version is unchanged.
+
+# v5.26 · AI ending review
+
+- Adds **Edit → Improve the ending with AI**. Identify the main point, choose a complete source-sentence ending and check the proposed payoff, removed speech, qualifications and opening promise locally. The reviewer can keep an already suitable ending.
+- Offers an editor choice for this review without changing the project's model setting. Reuses existing timed transcription and limited ending observations from the local example library; no new model download or cloud inference is needed.
+- Trims only the tail of the current timeline. Earlier speech and internal source gaps are preserved. Timing guards reject cut-off words, unanswered endings, two questions in an interview and directly dependent closing cautions; a source check cannot override these guards.
+- Shows the ending, exact main-point/payoff quotes, removed speech and duration before explicit **Apply this ending**. Generation is on demand and cached, with one bounded retry. Failed generation leaves saved cuts intact. Sports and silent clips retain manual controls.
+- Stores ending selections separately from discovery, manual boundaries and styles. Applying creates a new export; Restore reuses the earlier export. Existing sources, transcripts, caption corrections, analyses, posting text and exports are retained. No automatic publication or analysis-cache version change. See [validation](V526_VALIDATION.md).
+
+# v5.25 · Repair rejected posting text
+
+- Gives the posting writer the rejected draft and source-check reason during its one bounded retry. It repairs unsupported wording against the final clip instead of starting again from an error alone.
+- Directs the writer and checker to preserve the terms linking conditions to outcomes, including the golden-signature London Eye prize. Corrected text still needs to pass the existing source, title, hashtag, closing and fresh-description checks.
+- Matches question hooks to the clip: rewards/reveals can use What, Why requires a stated reason, and How-to requires an actual method. Event descriptions do not have to use commentary phrasing.
+- Removes duplicate title alternatives before checking the remaining hooks; repeated ideas no longer cancel an otherwise valid posting package.
+- Shows a concise explanation and retry/manual-edit guidance when generation fails. Existing manual copy, checked caches, source media, transcripts and exports remain saved. Loaded older posting controls refresh without restarting the app.
+- Uses the installed local model and existing transcript. No new downloads, transcription, video rendering, cloud inference or automatic publication. New writer cache keys avoid reusing older drafts. See [validation](V525_VALIDATION.md).
+
+# v5.24 · AI opening text
+
+- Adds **Look → Improve the opening with AI**. Generate a short first-screen hook from the final kept transcript and its first three seconds, then explicitly apply it to preview a new export.
+- Tries several hooks, checks the selected wording in a separate local pass, and shows exact supporting subject/payoff quotes. Guards reject placeholders, unsupported acronyms/absolute claims and copied opening questions. Failed generation preserves the previous opening.
+- Uses saved opening/headline presentation lessons from unexcluded **Good pattern** examples. Other clips' facts, titles, transcripts and analytics are not passed as evidence; the full-record review flags are independent of this limited presentation use.
+- Reuses transcription and caches checked suggestions by final cut, model, opening timing and lessons. Generation is on demand, with one bounded retry. Applying changes the text shown for the first three seconds; speech boundaries, internal cuts and social posting copy retain their existing behavior.
+- Keeps manual styling authoritative and retains earlier exports. Sports and silent clips use manual opening text. No new model download or account is needed. The model checks its own suggestion, so wording still requires your review; no retention improvement is established. See [validation](V524_VALIDATION.md).
+
+# v5.23 · Local example library
+
+- Adds **Example library** in the sidebar. Browse supplied clips, actual posted titles, opening text, saved transcripts and sampled frames, with notes on what works and what to avoid copying.
+- Keeps good patterns, mixed examples and patterns to avoid separately labeled. Editable notes and review status save locally. Analytics show views, engaged views, stayed-to-watch and average-viewed percentages with their export period; unconfirmed clip-to-YouTube matches remain visibly marked.
+- Seeds this Mac's library with the seven supplied clips and existing review material, reusing their transcripts without transcription or AI inference. Add more video examples, supply a transcript if available, search/filter the library and download its JSON. Adding the same clip preserves its previous notes.
+- Stores the library under data/example-library/, outside Git. Original imported clips remain referenced at their existing paths; sampled frames and transcripts are copied into the library. Uploaded new examples get their own local media copy. Missing originals leave notes and transcripts available.
+- This is step 1 only: the reference library does not change clip selection, cuts, opening text, social titles, analysis caches or model weights. See [validation](V523_VALIDATION.md).
+
+# v5.22 · Hook titles and fresh descriptions
+
+- Opening **Social media** now writes missing YouTube posting text automatically once. It uses the selected local editor and the final clip's transcript; viewing Edit or Look does not run this writing task.
+- Proposes different hooks around the clip's question, contrast and takeaway. A separate source check chooses a supported title and discards unsupported suggestions. **More title ideas** allows choosing another checked hook when available; hashtags remain inside each title.
+- Descriptions explain the point in fresh words. Copied transcript passages and unsupported absolute claims are rejected instead of becoming the description. Legacy quoted defaults are replaced, preserving separately edited titles and other platform packages; saved manual copy stays as written.
+- New writer caches avoid reusing earlier weak AI copy without clearing existing caches or media. Failed automatic generation can be retried explicitly and does not loop on reruns. No generation publishes a video. Requires Streamlit 1.64 or newer, already present in the pinned local runtime. See [validation](V522_VALIDATION.md).
+
+# v5.21 · Refresh older posting controls
+
+- Fixes the Social media tab failing with "post_form() takes 2 positional arguments but 3 were given" when an already-running server retains the previous posting form.
+- Refreshes that older module before opening the clip's controls. Current controls are reused normally; saved posting text and video exports are retained. See [validation](V521_VALIDATION.md).
+
+# v5.20 · AI posting titles with inline hashtags
+
+- Renames the clip's Post tab to **Social media** and adds **Generate title & description with AI** to its YouTube posting package. The selected local 4B editor writes the headline and a short final-clip summary, then independently checks them against the final transcript.
+- Hashtags are part of the title, within YouTube's 100-character limit. The description summarizes the clip without a separate hashtag block. Existing separate hashtags display inline in titles or captions; separate hashtag input fields are removed.
+- Keeps writing on demand, with model/final-clip caches and an explicit **Generate fresh text** option. Failed generation preserves saved text. No transcription, video rerender, cloud AI or social-account connection is needed to generate copy.
+- Retains editable posting fields and existing reviewed publishing drafts. **Use current posting text in this draft** explicitly copies updated text into an editable draft; saving/reviewing and publishing remain separate user actions.
+- Speechless clips use manual posting text. Model summaries and source checks can be wrong; review the wording before posting. Sports vision, source videos, caption timing, opening overlays and combined videos keep their existing behavior.
+
+# v5.19 · Qwen3.5 local AI editor option
+
+- Installs Qwen3.5-4B in 4-bit form locally, with a pinned model revision and an editor-only setup command. No account or paid API is required. Models are never downloaded during processing.
+- Adds **AI editor** in Advanced settings. Qwen3.5 is available as an experimental option for topic discovery and Shorts planning/checking in either processing mode. Qwen3 4B remains recommended after the initial saved-video comparisons; a newer model is not automatically a better editor.
+- Separates model-specific analysis, topic and edit caches while reusing saved speech. Structured edit decisions identify their model. Existing videos, transcripts, exports and prior results are preserved.
+- Keeps the 3 GiB MLX limit and serial model workers, adds small prefill batches and a bounded prompt context without silently truncating source text.
+- Retains the existing source-fidelity checks. Invalid or rejected cuts remain unverified original drafts or are excluded; the new model cannot bypass those checks. Sports vision, visual packaging and combined-video ordering keep their existing behavior.
+- See V519_VALIDATION.md for real offline inference results, measured limits and automated checks.
+
+# v5.18 · Combine clips into longer videos
+
+- Adds Combine clips in the sidebar and collection, plus Add to combined video in the clip editor. Select finished clips from multiple projects, search/filter them, change their order and remove items without deleting their original files.
+- Saves named combinations locally for later editing. Uses the exact finished clip versions, retaining their baked captions, opening text and framing. New individual edits can be added as new versions.
+- Exports one wide 16:9 MP4 by default (1280 × 720), with vertical output available. Clips fit without new cropping; unused space can use a blurred or dark background. Existing cropped areas cannot be restored by joining exports.
+- Normalizes differing frame sizes/rates and audio formats one clip at a time. Silent clips receive silence; speech is not synthesized or analyzed. Available SRT captions shift onto the combined timeline, with an embedded subtitle track, chapter markers and a downloadable timestamp list.
+- Caches prepared clips and completed combinations. Reordering reuses prepared clips; an unchanged export skips encoding. Prior exports remain saved. Preview/browser download are on request, and Finder can reveal the saved file directly.
+- Shows when a saved result is outdated after combination changes. Progress uses completed preparation and actual FFmpeg output times; remaining time is an estimate.
+- No new dependencies, model inference, transcription, discovery or analysis-cache version change.
+
+See V518_VALIDATION.md for mixed-format regressions, the real 82-second export, preservation checks and performance measurements.
+
+---
+
+# v5.17 · Clearer framing and final-clip packaging
+
+- Organizes clip review into Edit, Look, Post and Advanced. Keeps the v5.16 Shorts Editor, manual boundaries, supported alternate versions and original comparison.
+- Adds cached sampling across kept footage for automatic speech crops, stable two-person split screen and optional speaker switching. Active Speaker requires user-confirmed anonymous labels and visible positions, holds shots for at least three seconds and ignores short acknowledgements. Uncertain scenes fall back; crop warnings remain visible. Automatic Sports keeps the full picture.
+- Adds Off / Subtle / Dynamic visual pacing. Subtle is the default for new speech looks; movement needs a useful final-transcript beat and safe sampled face margins. The real kicker example received one restrained 3.5% punch-in; the shorter running-back example received none.
+- Emphasizes a few final hook/payoff caption phrases with larger bold treatment or an optional Gentle pop. Caption timing and manual corrections remain intact. New hook suggestions use extractive kept speech, preserve negation/qualifications and can be edited or hidden.
+- Adds separate editable YouTube Shorts, TikTok and Instagram Reels copy, with copy controls and final-edit caches. Specific names/tags must occur in the final transcript. Manual posting text and existing social drafts are retained; no automatic publication occurs.
+- Extends the existing thumbnail feature with eight sampled frames, three ranked/separated choices and editable cover text. New automatic exports can supply clean source frames without duplicate captions. Generation happens on request; blink/expression assessment is still limited. Downloads do not set a platform thumbnail.
+- Adds timestamped B-roll suggestions only, eight explained editorial assessments and a descriptive local Creator Profile from human ratings. Unknown criteria remain unscored. No virality probabilities, preference training, stock downloads, cloud AI or paid API was added.
+- Preserves saved legacy looks until Apply style. Separate packaging caches leave analysis-cache versions and existing transcription/model behavior unchanged. Same-edit reruns reuse metadata, sampling and export caches; only the chosen variant renders.
+
+See V517_VALIDATION.md for measured before/after exports and limitations. V517_IMPLEMENTATION_REPORT.md documents inspected reference code, adopted/rejected ideas, changed files and the recommended next update.
+
+---
+
 # v5.16 · A separate Shorts Editor
 
 - Adds **Edit speech into tighter Shorts**, enabled for new speech analyses. Moment discovery supplies source neighborhoods; a separate editor chooses the actual opening, explanation, internal cuts and payoff. Answer-only openings are allowed when context and meaning checks pass. Sports action keeps its existing pipeline.

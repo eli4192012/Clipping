@@ -7,7 +7,7 @@ A local video clipping studio for this Apple Silicon Mac. No paid AI APIs or acc
 This app requires an Apple Silicon Mac. The current development environment uses Python 3.13.14. Install Python 3.13 and put Node.js on your PATH if you want YouTube imports. Then run:
 
 ```sh
-git clone https://github.com/eli4192012/Clipping.git
+git clone --branch codex/v5.17-visual-packaging https://github.com/eli4192012/Clipping.git
 cd Clipping
 python3.13 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
@@ -16,7 +16,7 @@ python3.13 -m venv .venv
 ./Start\ Clipping.command
 ```
 
-The private repository requires access to the GitHub account. `requirements.lock.txt` records the installed dependency versions; `requirements.txt` lists the direct dependency constraints. Model setup downloads files from Hugging Face and needs internet access and several GB of free space. Transcription, model inference and editing then run locally. Alignment and speaker detection have separate optional setup commands described below.
+The repository is public. The setup command selects the development branch in [draft PR #1](https://github.com/eli4192012/Clipping/pull/1), which contains the version described here. `requirements.lock.txt` pins the complete main environment, including MLX Whisper, scene detection and Keychain support; `requirements.txt` lists the direct dependency constraints. Model setup downloads files from Hugging Face and the pinned OpenCV YuNet face detector and needs internet access and several GB of free space. Transcription, model inference and editing then run locally. Alignment and speaker detection have separate optional setup commands described below.
 
 The repository contains the app, tests and documentation. Your videos, saved project transcripts, exports, downloaded models, virtual environments, worker artifacts and credentials stay on this Mac and are excluded from Git. Small regression fixtures in `tests/fixtures/` are included for the tests. Validation reports refer to local media and work files that are not included in a clone. GitHub is a code backup; back up your local projects and exports separately.
 
@@ -25,6 +25,10 @@ Run the test suite after installing the dependencies:
 ```sh
 .venv/bin/python -m unittest discover -s tests -q
 ```
+
+For development checks, install `requirements-dev.txt`, then run `.venv/bin/ruff check .`, `.venv/bin/python -m pip check` and `.venv/bin/python scripts/check_install.py`. The import check does not download or load model weights. GitHub Actions runs the same checks and regression tests on an Apple Silicon Mac, starting with a fresh environment. Lint checks syntax and undefined names in first-party code; vendored upstream files are excluded.
+
+When direct dependencies change, regenerate the lock on Apple Silicon with Python 3.13 using `.venv/bin/uv pip compile requirements.txt --python .venv/bin/python --no-header --no-annotate --no-emit-index-url --output-file requirements.lock.txt`, then test installation in a fresh environment. The existing lock keeps compatible pins unless explicitly upgraded. The sound and optional speech environments remain separate.
 
 ## Open
 
@@ -38,15 +42,129 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.16**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v5.35**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+
+## Personal posting style
+
+The local posting writer can use your saved titles, descriptions and inline hashtags as style examples. This Mac has an **Indy Audible** reference built from the supplied October 7, 2026 PDF: all 63 original pairs are archived, with 56 eligible references after filtering copied-speech descriptions, generic introductions and conflicting years/outcomes. The original PDF is retained locally. This is example-based personalization; model weights are unchanged and the PDF contains no paired source transcripts or performance metrics.
+
+When you open **Social media**, the writer selects up to three related references and displays the channel/style count. It writes distinct title approaches with optional questions, a natural one- or two-sentence description, and supported entity/topic hashtags inside the title. Historical examples guide phrasing only. Their names, scores, dates and claims are not evidence for the new clip. The source checker sees only the final kept speech; additional guards reject unstated confidence/resilience/chemistry/sharpness claims and numbers absent from that speech. Evidence phrase IDs attach exact speech without asking the model to reconstruct a quote. These guards are conservative and can still reject good phrasing or miss errors; review before publishing.
+
+New AI-generated titles **always include `#fyp`**. Colts clips use **`#Colts #NFL #Football #fyp`**, identified from the final speech or saved video title/publisher, including the YouTube import manifest. These category tags are separate from player/topic tags that still require current speech evidence. The app reserves space for the required suffix within 100 characters, then adds up to two supported optional tags if they fit. It never cuts off the headline or drops `#fyp` to make room; a too-long headline gets a bounded AI repair.
+
+The writer also retrieves up to two related posted titles from saved Example library clips labeled **Good pattern** and not **Excluded**. These are presentation references only; they do not establish successful performance or verified factual claims. On this Mac, two saved clip titles are eligible. Your approved Buck/Tommy rewrite is stored as title feedback with the PDF corpus and is retrieved for related topics. References and category metadata do not enter the source-check prompt. Changes to eligible clip titles also separate posting caches. Existing manual text and reviewed drafts are preserved; use **Generate fresh text** to request a replacement. See [v5.34 validation](V534_VALIDATION.md).
+
+The profile and corpus are stored under ignored `data/posting-style/`. They remain on this Mac and are not included in GitHub clones. A new profile gets a separate posting-cache identity; transcription, analysis, edits, model weights and previous copy are retained. Saved manual text and reviewed publishing drafts stay authoritative. Use **Generate fresh text** to explicitly replace their posting fields with a new checked draft. No clip is published by importing examples or generating text.
+
+For another extracted corpus, use `.venv/bin/python scripts/import_posting_style.py /absolute/path/examples.json`. The UTF-8 JSON schema contains `channel` and `records`, each with a unique integer `id`, `title`, and `description`; optional source-name/hash/date fields record provenance. Optional `title_feedback` contains at most 20 explicit approved rewrites with `original` and `preferred` strings. Imports archive all original pairs before replacing the active profile. Parsing PDFs is an import preparation step and adds no app runtime dependency. See [v5.33 extraction validation](V533_VALIDATION.md).
+
+## Automatically clip new YouTube uploads
+
+Choose **YouTube channels** in the sidebar. Paste a public channel link or `@handle`, choose a clip preset or a saved project's settings, then click **Connect and start watching**. The form defaults to `@Colts`, **Automatic per upload**, 30–120 seconds for speech, vertical output and Balanced processing with the existing local AI editor. Fixed Interview, Podcast and football-highlight presets are also available. Required models must already be installed.
+
+Automatic mode first saves/reuses the full transcript, then gives it to the existing local speech/title/face detector to select Interview, Podcast or Sports. The editing pass reuses that transcript. Interviews retain the one-question limit; podcast/story rules remain distinct. Sports use a 10–35-second preference, 35% coverage ceiling, and football vision only when its selected local model is already installed. Detection results, confidence and the resolved per-video settings are retained with the queue item. Detection and sports boundaries can still be wrong and require review. Channel preferences remain unchanged; retries retain the original speech duration preferences as well as the last detected mode.
+
+A detached local watcher checks about every five minutes with the existing [yt-dlp](https://github.com/yt-dlp/yt-dlp) dependency. No Google sign-in, OAuth verification or paid API key is needed for public source discovery. It reads the channel's **Videos** tab, excluding Shorts and live-stream tabs, and skips live/upcoming/still-processing uploads. Each check examines at most the latest **50** regular uploads. On first connection and later checks, eligible videos are those published within **48 hours**, plus the newest finished regular upload even if older. Age is checked with individual video metadata, not approximate channel-page dates. An unavailable/undated upload waits for a later check; channel errors back off up to one hour.
+
+Eligible videos enter the same FIFO **Video queue**, oldest eligible first, with frozen clip settings and automatic exports. The queue imports a source when its turn arrives, then reuses the normal local transcription, AI selection, captions and rendering. Downloads also hold the single heavy-job lock. It rechecks publication age before importing: an upload that aged beyond two days is skipped unless it is still the newest finished regular upload. Saved source files, transcripts and successful renders are reused. A manual project and its preferences are retained when its source is reused.
+
+Channel watches, decisions and queue receipts live in ignored local SQLite files. Video-ID deduplication covers waiting, running, failed, removed and completed automatic jobs, including recovery between database commits; a matching manual queue job also counts as handled. **Retry this video** in Video queue resumes a failed import/clip job without adding another automatic entry. **Check now** retries channel discovery or metadata lookups. Reconnecting the same channel updates future jobs without changing jobs already waiting. **Pause watching** stops further discovery; already queued jobs continue. **Pause queue** prevents new uploads from automatically resuming processing. A naturally emptied queue restarts when the next upload arrives.
+
+The channel page shows watcher state, last check, errors and upload history linked to actual queue states. Closing the browser does not stop the watcher. Watching holds a temporary idle-sleep assertion while its process runs. Keep the Mac powered on, awake and connected to the internet. Closing the lid still requires keep-awake support; the queue's optional Amphetamine session ends when that queue finishes and does not provide continuous idle channel watching. Manual sleep, shutdown or power loss stop checks. Reopening the app restarts enabled watches and catches up eligible uploads within the latest-50 window. This feature clips and exports; it does not publish videos or implement the future two-posts-per-hour publishing rule. See [v5.35 validation](V535_VALIDATION.md).
+
+## Line up videos to process while you are away
+
+Choose **Video queue** in the sidebar. Select multiple imported projects under **Add saved videos**, then click **Add videos to queue** and **Start queue**. New imports can be added with **Add to video queue** on project setup, after choosing their clip settings. Each queue entry saves those settings; changing a project's preferences later does not change its waiting entry.
+
+The app finds clips and exports every selected suggestion before starting the next video. Automatic export is enabled by default; the saved-video form can also queue analysis only. Exports use the default look, captions (including saved corrections) and framing. Previous manual edits remain available. Open finished results to review, adjust and download the clips; finished exports also appear in Combine clips. Nothing is posted automatically.
+
+Move waiting videos up/down, remove them without deleting their projects, or **Pause after this video**. A failed video is marked **Needs attention** and the next video continues. **Retry this video** reuses successful analysis and render caches. Identical active entries are not added twice. Removing/changing a source file after adding it causes a recoverable error rather than silently processing different media.
+
+The queue is saved in local SQLite and runs in a separate Python process. Closing a browser tab or changing app pages does not stop it. Normal queues hold a temporary idle-sleep assertion; closing the lid can still interrupt them. For closed-lid use, follow the optional setup below. Shutdown or power loss still stops processing. Reopening the app resumes interrupted active work with normal lid-open processing; closed-lid mode must be selected again for a new start. Paused queues remain paused. Large-model work and exports share the existing single-job lock, including inherited locks in child processes after a runner failure. Progress reflects actual analysis/export stages; analysis time is an estimate and export time is additional. See [queue validation](V531_VALIDATION.md).
+
+### Clipping with the MacBook lid closed
+
+Install [Amphetamine](https://apps.apple.com/us/app/amphetamine/id937984704), a free Mac App Store keep-awake utility, and complete its first-run setup. With videos waiting in **Video queue**, select **Allow lid-closed processing with Amphetamine**. Connect your charger, then click **Start queue**. Complete any macOS Automation permission and Amphetamine closed-display prompts before closing the lid. The utility's scripting dictionary recommends completing its closed-display warning once in Settings → Sessions and selecting the warning's option to stop showing it for later automated sessions.
+
+Clipping starts a temporary, screen-sleep-allowed session capped at 24 hours. An independent local watcher ends the session when the queue finishes, pauses or its runner exits. It monitors the charger and Amphetamine's reported session/mode; if either is lost, remaining videos pause after the current video. Keep the charger connected and the Mac on a hard surface with room for airflow. If Amphetamine already has a session active, the queue does not replace it: end it yourself or use normal lid-open processing. If the monitor itself fails, the UI stops claiming it is active and the finite timer remains the fallback; end the session in Amphetamine's menu if needed.
+
+The app uses Amphetamine's installed AppleScript API. It does not install privileged helpers, change sudo permissions, run `pmset` writes or alter permanent sleep settings. Amphetamine may separately offer its optional Power Protect helper, which is managed by that app. Only the current queue start opts into this mode; automatic restart recovery uses normal processing. This release's tests cover lifecycle and queue behavior, and the real scripts compile against Amphetamine 5.3.2. A physical closed-lid processing trial remains required on your Mac; a reported enabled mode alone does not prove the Mac stayed awake. See [closed-lid validation](V532_VALIDATION.md).
 
 Saved videos can be reopened from the start screen. Settings and previous results are kept locally. Initial processing estimates use video length and selected review options; later estimates use this video's previous measured processing time. Percentages represent processing milestones, not a promise of constant speed.
 
+Individual and combined exports report progress from FFmpeg's encoded output time. A wall-clock watchdog stops a hung export, terminates its process, and removes its new partial video. The limit is the larger of three minutes or twelve times the output duration plus one minute; it is a failure limit, not a processing estimate. Saved source videos, transcripts, earlier exports and analysis caches remain available.
+
+Failed operations keep private diagnostics in `work/logs/app.log`, independent of the launch directory. Logs rotate at 1 MiB with three backups and stay excluded from Git. General and account errors record exception types and call locations without exception messages, locals, transcripts or provider responses; worker failures retain child traceback locations before temporary files are removed. FFmpeg errors keep a bounded diagnostic tail with URLs and token fields removed.
+
+## Complete-idea selection
+
+Enable **Keep complete ideas with AI** in clip preferences. Balanced edits keep the subject, the useful explanation and the conclusion. They favor complete sentences, restore unfinished speech split across transcript pauses, and limit internal deletions to clear acknowledgements, literal repetition or discussion references. The editor keeps the question when the answer needs it, and interview edits may contain at most one detected reporter question. Fast remains an optional shorter version.
+
+The duration slider is a preferred range, not a reason to add unrelated speech. A genuinely brief complete idea can be shorter when the final check explains why no useful explanation is missing. Ideas that cannot fit the maximum are skipped instead of being chopped in half. Unverified edits appear only as original moments in the selection report, in either processing mode.
+
+Earlier analyses stay available. Open an older collection or clip and click **Find fuller clips with updated AI** to create a separate analysis using the saved transcript. New editing and review caches have their own selection version; transcription caches and the global analysis version stay unchanged. Local AI still makes mistakes, especially with missing punctuation or mixed speakers, so review the final speech before posting.
+
 ## Local models
 
-Balanced uses Whisper base locally on the CPU; Higher quality uses the local Whisper large-v3-turbo model. The Shorts Editor uses Qwen3 4B 4-bit through MLX in either mode. The older continuous-clip workflow can use Qwen3 1.7B in Balanced. Models are downloaded once; subsequent processing uses their local files. No transcript or media is sent to a model service. Streamlit telemetry is disabled and the server binds only to localhost.
+Balanced uses Whisper base locally on the CPU; Higher quality uses the local Whisper large-v3-turbo model. Under **Advanced settings · duration, coverage & models → AI editor**, choose **Qwen3 · 4B (recommended)** or **Qwen3.5 · 4B (experimental)**. Both use 4-bit local MLX inference and apply in either processing mode. Qwen3 remains the default: the initial saved-video comparison did not establish more reliable edits with Qwen3.5. Older saved settings retain their original model choice, including Qwen3 1.7B for legacy Balanced continuous clips.
+
+Qwen3.5 is downloaded once to `models/qwen3.5-4b` (about 3.06 GB) from a pinned MLX Community revision. On this Mac the existing dependencies support it; no other AI application or account is required. To install only this editor, run `.venv/bin/python download_models.py --editor-only`; the normal model setup also installs it. Application processing never downloads missing weights. MLX LM loads only its text tower for transcript editing; this update does not change sports frame review or add AI ordering to combined videos.
+
+Changing the AI editor creates separate analysis, topic and edit-decision caches. Existing transcripts are reused, old results stay saved, and repeated work with the same model reopens cached decisions. Inference runs one model process at a time with the existing 3 GiB MLX limit, small prompt-prefill batches and a bounded context; oversized source neighborhoods fail for review instead of silently losing text. No transcript or media is sent to a model service. Streamlit telemetry is disabled and the server binds only to localhost. See [v5.19 validation](V519_VALIDATION.md) for comparison results and limitations.
 
 If models are missing, double-click **Download Models.command** while connected to the internet. Allow several GB of disk space for dependencies, models, source videos, and exports. English editorial review is recommended. Whisper can detect other languages, but this app's selection rules are English-oriented.
+
+## Choose moments using speech, visuals and sound
+
+v5.28 adds a local curation pass after speech editing and before final clip selection. In project settings, enable **Use speech, visuals & sound to choose clips**, choose how many moments to review visually (1–6, default 3), then **Find my clips**. When sound setup is present, the option defaults on for settings without a saved choice. Existing saved analyses reopen as before; **Adjust settings** starts a separately cached analysis using the new option.
+
+The pass reuses your transcript and grounded speech review. Google's local **YAMNet** classifies source-timed sound windows, including speech, music and possible laughter/applause/cheering. The installed **Qwen3-VL 4B** examines three frames across each selected moment's retained source ranges; a cheap scan records motion and camera changes. Interview, Podcast, Sports, Music and Gaming presets weight supporting cues differently. These are transparent editing rules, not a newly trained genre or emotion model. Supporting cues make only small priority adjustments; rejected/incomplete clips and the one-question interview limit stay authoritative.
+
+The first setup needs internet access; subsequent inference runs offline. Install sound separately so TensorFlow does not alter the app's MLX dependencies:
+
+```sh
+.venv/bin/python setup_sound.py
+```
+
+This uses pinned dependencies in `.venv-audio`, unmodified Apache 2.0 YAMNet source, and checksum-verified official model weights (about 15.3 MB). Dependencies need additional disk space. Sound is already installed on the development Mac. The normal `download_models.py` setup provides the 4B vision model; no additional vision weights were downloaded for this release. Missing models and failed observations stay visibly unavailable.
+
+Open **Speech, visuals & sound evidence** in the collection to inspect reviewed moments. For an older clip, use **Advanced → Review this moment with speech, visuals & sound**. That button reviews the current final cut without applying edits, rendering a new export or changing posting text. Evidence includes source timestamps, actual frames, uncertain observations, available signal weights and downloadable JSON. Viewing evidence runs no model. Cached sound, motion, frame observations and complete reports are reused; different source files, cuts, transcripts, genre or model configuration get separate reports. Stale cut/source evidence is hidden until reviewed again.
+
+This first version reviews only a limited set of existing candidate moments visually. It does not use emotion inference, learn from analytics, certify a completed sports play or predict views. The small saved-video trials show that cues can change priority, but do not establish better clip quality or audience retention. The smaller 2B vision model produced unreliable labels during testing; this pass uses 4B and marks detected contradictions uncertain. Inference still makes mistakes, so inspect frames and listen before posting. See [v5.28 validation](V528_VALIDATION.md) for measured results and preservation checks.
+
+## Combine clips into a longer video
+
+Choose **Combine clips** in the sidebar, or **Add to combined video** while reviewing a finished clip. You can use clips from multiple saved projects.
+
+1. Give the combined video a name. **Wide · 16:9** is the default (1280 × 720); vertical output is also available.
+2. Find saved clips by project or title, choose them and click **Add selected clips**. Clips appear in the order you add them.
+3. Use **↑ / ↓** to change the order or **Remove** to remove a clip from this combination. Your order and settings save locally; **Saved combinations** reopens them later.
+4. Click **Export combined video**. The app joins the finished clips, saves one MP4 and combines available SRT captions with updated timestamps. Clip titles become chapter markers and a downloadable timestamp list.
+5. Use **Show video in Finder**, or **Prepare video download → Save combined video**. Preview and browser download load the longer video only when requested.
+
+Clips retain their finished captions, opening text and framing. Vertical clips fit into a wide canvas with a blurred background by default; turn that option off for a dark background. This step does not restore picture areas cropped out of a finished clip. For footage that should fill a wide video, choose Original framing when reviewing that clip before adding its new export. Open **Review clip** once for any suggestion that has not been rendered yet; only finished exports appear in this builder.
+
+Combinations use direct cuts, without new transitions, speech changes or AI analysis. Review the story and joins yourself. Changes to an individual clip produce a new saved version that you can add; an existing combination keeps the version you selected. Changing a combination leaves prior exports intact and visibly marks the last export as outdated until you export again.
+
+All processing stays on this Mac. The exporter prepares one clip at a time, handles differing shapes/frame rates and silent clips, and caches prepared media. An unchanged combination reuses its output; changing order reuses its prepared clips. Sources, transcripts and separate clip exports remain intact. Temporary prepared media lives under work/assembly-renders/ and can take additional disk space. See [v5.18 validation](V518_VALIDATION.md) for measured results and limits.
+
+## Example library
+
+Choose **Example library** in the sidebar to collect clips and published titles for future AI improvements. This Mac's v5.23 library includes the seven supplied examples, their saved transcripts and sampled frames, the actual posted titles and available analytics. A fresh clone starts with an empty library because these personal records are excluded from Git.
+
+Search by title or notes, filter good patterns/mixed examples/patterns to avoid, and choose a clip. **Show clip preview** loads its video on request. Review **What works** and **What to avoid copying** together: a successful post can still contain a weak start, an unsupported title claim or an extra interview question. Analytics retain their export period and engaged-view counts. A possible YouTube match remains unconfirmed until you mark it confirmed; percentages from tiny audiences are not automatic quality scores.
+
+Use **Review and edit example notes** to change its displayed name, actual posted title, opening text, lessons and notes. Mark a record ready for future reference only after reviewing its lessons. **Add an example** saves a supplied video and optional transcript without transcription, rendering or model inference. Adding the same file keeps its earlier notes. **Download example library** saves all reference records as JSON.
+
+The library lives in data/example-library/. The opening writer uses up to three unexcluded **Good pattern** records' saved opening/headline lessons as presentation guidance, including lessons saved before the full record is marked ready. That review flag still concerns the full record, transcript and analytics association; those facts and metrics are not used to write another clip. Selection, speech cuts, social posting copy and model weights retain their existing behavior. The seven original imported videos are referenced at their existing locations; keep those files or restore them if moved. Their library notes, transcripts and sampled frames remain available even when an original is missing. New uploaded examples are copied into the library's assets folder. Back up that folder along with your other local projects.
+
+## Improve the opening
+
+Open a clip and choose **Look → Improve the opening with AI → Generate AI opening**. The installed local editor reads the final kept transcript and the first three seconds, tries several short hooks, and checks a selected hook in a separate pass. The aim is to name the subject immediately and preview its actual takeaway rather than display filler or a generic quote. Read **Why this fits the clip**, then choose **Apply this opening text** to render it. It appears from the first frame for up to three seconds. This step improves opening text; it does not move the spoken opening or ending.
+
+Generating alone keeps the current style and preview. **Generate a fresh opening** requests new inference; reopening the same cut reuses its checked cache without loading a model. Changed cuts, caption corrections, first-speech timing, model or presentation lessons produce a separate cache. Only a successful check is saved; a failed fresh attempt retains the earlier suggestion and style. Your manual opening field remains editable and can be left blank to hide it. Applying an AI opening preserves the other saved styling choices and creates a new export without deleting earlier exports.
+
+Everything uses existing local transcripts and model weights. Sports and silent clips use manual text. Supporting quotes and the second model pass reduce mistakes but do not establish factual reliability: the same model can approve its own mistaken paraphrase. Review meaning, qualifications and promised answers before applying. No virality or retention gain is claimed. See [v5.24 validation](V524_VALIDATION.md).
 
 ## Current Shorts workflow
 
@@ -56,7 +174,38 @@ Leave **Edit speech into tighter Shorts** enabled to find moments, then choose t
 
 Caption timing follows the edited timeline. Opening and posting text comes from the final kept speech. Applying manual start/end boundaries exports one continuous source range; restoring suggested boundaries restores the internal cuts. Saved older clips can request a local Shorts edit without rerunning transcription.
 
-These are experimental editing estimates, not predictions of views. The local model can make wrong decisions; listen to joins and compare the original. The larger local editor adds processing time. See V516_VALIDATION.md for measured examples; no whole-video speed guarantee is made. Detailed 100-point ranking, cold opens, visual pacing and analytics learning remain later work.
+These are experimental editing estimates, not predictions of views. The local model can make wrong decisions; listen to joins and compare the original. The larger local editor adds processing time. See V516_VALIDATION.md for measured examples; no whole-video speed guarantee is made. Cold opens, richer scoring and analytics learning remain later work.
+
+## v5.17: finishing the Short
+
+Open a clip to find **Edit / Look / Social media / Advanced** tabs. Edit keeps the existing Shorts versions, original comparison and manual boundaries. All packaging uses the selected final timeline, including caption corrections.
+
+**Edit → Improve the ending with AI** reviews only this selected clip. Choose a local ending editor, generate a suggestion, inspect the main-point/payoff quotes and removed speech, then explicitly **Apply this ending**. The choice starts with the project editor; changing it here does not change project settings. The reviewer can recommend keeping the current ending. It offers complete source-sentence boundaries, trims only a suffix of the selected speech, preserves earlier internal gaps and rejects cut-off words, unanswered questions, multiple interview questions and directly dependent closing qualifications. It reuses the original saved timed transcript and limited ending observations from the example library; example facts and analytics are not evidence. Sports and silent clips use manual boundaries. It does not extend a cut or pick a different opening.
+
+Applying saves a separate ending override and creates a new final-cut package/export; existing analysis, caption corrections, source media, posting copy and exports stay saved. **Restore prior ending** reopens the earlier cut, while manual boundary edits and **Restore suggested boundaries** clear that cut's ending override. Generation alone does not render or publish. Reopening reuses the checked decision. Editing opening text keeps an applied cut and warns when the old ending review used different text; another review gets a separate cache key. Model checks can reject good cuts or approve poor ones; listen and review before sharing. See [v5.26 validation](V526_VALIDATION.md).
+
+- **Look:** Portrait · automatic now samples kept footage across the clip. Speech clips default to Subtle visual pacing: a small progressive punch-in at a useful speech beat, then a wider ending, only when sampled face margins permit it. Off removes this movement; Dynamic permits up to two stronger changes. Some clips correctly receive no zoom. Manual layouts and crop sliders remain available. Automatic Sports framing keeps the full picture and disables speaker switching and pacing.
+- **Conversations:** Automatic can put two stable visible speakers in split screen. Active Speaker requires existing anonymous transcript labels and your confirmation of each person's left/right source position. It holds a shot for at least three seconds and ignores brief acknowledgements. Missing labels, unconfirmed positions or unstable scenes use split screen or the full picture. Face sampling does not understand slides, balls or objects; review the visible crop warning and choose full picture when those matter.
+- **Captions and hooks:** A few phrases from the final hook/payoff can receive larger bold emphasis or a Gentle pop. Word timing still follows the edited timeline; caption corrections remain supported. Suggested opening text quotes strong kept speech and preserves qualifications. Edit it, use the suggested hook, or leave the field blank to hide it. If a truthful short phrase cannot be established, no hook is invented.
+- **Social media:** Opening this tab generates a hook title and a brief description for the YouTube package using the selected local 4B editor. It proposes different question/contrast/takeaway hooks and a second source check picks the strongest supported title, discarding unsupported ideas. **More title ideas** lets you choose another checked hook when available. Hashtags stay inside the title, within 100 characters. Descriptions use fresh words about this final clip; copied transcript passages are rejected. A silent clip needs manual posting text. AI writing works without a connected social account.
+- **Posting corrections:** A rejected draft receives one local repair using its actual wording, the checker's reason and the final transcript. Distinctive terms and their conditions/outcomes must stay tied to the supporting source statement. The corrected draft passes the same checks before it is saved. A remaining failure shows a short explanation and offers fresh generation or manual editing; worker tracebacks stay out of the form. These model checks can still make mistakes. Review the copy before posting. See [v5.25 validation](V525_VALIDATION.md).
+- **Saved posting text:** Opening Edit or Look does not start posting inference. Social media generation runs once for missing text and reuses checked copy for the same final transcript, writer version and model. Earlier AI copy is refreshed with the new writer; legacy quoted descriptions are replaced while separately edited titles are preserved. Saved manual text remains authoritative. **Generate title & description with AI** explicitly replaces the fields; **Generate fresh text** requests new inference. Failed automatic generation does not retry on every rerun, overwrite saved files or insert the transcript as a fallback. Nothing is published by generating text. Existing reviewed publishing drafts retain their wording; **Use current posting text in this draft**, then **Save draft & review**, applies new copy to an editable draft. TikTok and Instagram packages remain editable with inline tags. See [v5.22 validation](V522_VALIDATION.md).
+- **Covers:** Click Prepare cover options on request. Eight frames are ranked by sharpness, exposure and available face cues; three separated options can receive editable hook text. New automatic exports provide clean source frames without duplicate burned captions. Blinks, expression and identities still need your judgment. Covers download separately; the app does not automatically set a YouTube Shorts cover.
+- **Advanced:** Inspect eight editorial assessments with grounded evidence where available; unknown criteria remain unscored. B-roll suggestions give final-output timestamps, a subject, a reason and a suitable source type. Nothing is downloaded or inserted. Saved source ranges and decisions remain available for debugging.
+
+**My review patterns** in the project library summarizes your local ratings. It does not train a model or change ranking. Older reviews remain readable; missing new details are not guessed. Fewer than five highly rated cuts are explicitly treated as insufficient evidence for stable preferences.
+
+Existing saved looks retain their previous rendering until you apply a new style. Sources, transcripts, prior analyses, reviews and exports stay local. Packaging, face samples, posting copy, opening text and covers have separate caches; reopening an unchanged edit reuses them. Rendering reuses transcription. AI opening generation and cover preparation add work only when requested; Social media writing follows the triggers described above. See [visual packaging validation](V517_VALIDATION.md) for its measured time/media checks and [the implementation report](V517_IMPLEMENTATION_REPORT.md) for the repository comparison and remaining limits.
+
+## v5.27: compare before and after
+
+Open **Before & after** in the sidebar to play saved pairs, read their opening text, posting titles/descriptions and last thoughts, inspect source ranges and check measured stage times. Rate the pair and save your notes locally. Earlier runs remain available through **Show earlier comparison runs**. The initial local collection compares four saved moments; it is not included in a fresh GitHub clone.
+
+To create another pair, open a saved clip and choose **Edit → Compare before and after**. The comparison reconstructs the prior selected timeline and opening, then reviews a copy: opening first, ending second, and another opening check if the speech changes. Posting text uses the final transcript. Both sides use the same caption rendering and full-picture layout so camera planning does not confound the comparison. The baseline uses the saved cut, not a rerun of historical discovery software. When an AI opening has already been applied, its literal transcript hook reconstructs the baseline; an earlier manual opening is not recoverable unless separately saved. Caption corrections are shared by both sides.
+
+The comparison runs offline with the recommended installed Qwen3 editor. It reuses transcription and discovery, caches checked decisions and renders, and never applies its suggestions to your active project. Failed ending reviews keep the prior speech. A failed final-cut opening check leaves that overlay empty, and unverified new posting copy is left empty rather than borrowing text for a different cut. Sports comparisons retain the manual cut and text. Source/transcript/media changes mark saved comparisons unavailable while retaining their notes. Viewing a saved pair starts no model or render job.
+
+One unfinished comma-ended question can continue across a short pause when the next clause starts in lowercase and the voice does not change. Completed questions, distinct voices, long pauses and numbered multiple questions remain separate. The comparison exposed this counting bug; the fix does not change the analysis-cache version or existing discovery results. See [comparison validation](V527_VALIDATION.md) for actual results and known model errors. A source self-check can accept incorrect relationships between otherwise real words; the comparison does not certify accuracy or predict views.
 
 ## Historical v1 foundation
 
@@ -67,7 +216,7 @@ These are experimental editing estimates, not predictions of views. The local mo
 
 ## Limits
 
-This is not a validated substitute for an editor. Local models and English-oriented rules can miss useful moments or remove necessary context. Long recordings can take substantial time. No live trend research, proven retention scores, YouTube keyword search or active-speaker tracking is included. Captions can be burned in and corrected locally. Portrait output supports automatic or manual crops and full-picture blur. Shorts editing omits source ranges without synthesizing or reordering speech; review its meaning and timing before publishing.
+This is not a validated substitute for an editor. Local models and English-oriented rules can miss useful moments or remove necessary context. Long recordings can take substantial time. No live trend research, proven retention scores, YouTube keyword search is included. Active-speaker crops require confirmed positions; they are not verified identity or lip-sync tracking. Captions can be burned in and corrected locally. Portrait output supports automatic or manual crops and full-picture blur. Shorts editing omits source ranges without synthesizing or reordering speech; review its meaning and timing before publishing.
 
 Uploaded copies and transcripts stay under `data/`; exports stay under `exports/`. To remove a video's stored data, stop the app and delete its corresponding folder under `data/`. No automatic deletion occurs.
 
@@ -88,7 +237,9 @@ python3.13 -m venv .venv
 - Whisper models: https://github.com/openai/whisper (MIT)
 - MLX LM: https://github.com/ml-explore/mlx-lm (MIT)
 - Qwen3: https://huggingface.co/Qwen/Qwen3-1.7B (Apache 2.0); quantized distribution: https://huggingface.co/mlx-community/Qwen3-1.7B-4bit
+- Qwen3.5: https://huggingface.co/Qwen/Qwen3.5-4B (Apache 2.0); pinned 4-bit distribution: https://huggingface.co/mlx-community/Qwen3.5-4B-MLX-4bit/tree/32f3e8ecf65426fc3306969496342d504bfa13f3
 - Streamlit: https://github.com/streamlit/streamlit (Apache 2.0)
+- OpenCV YuNet face detection: https://github.com/opencv/opencv_zoo/tree/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet (MIT; model and license downloaded during explicit setup)
 - imageio-ffmpeg: https://github.com/imageio/imageio-ffmpeg (BSD-2-Clause). Its bundled FFmpeg binary has its own LGPL/GPL terms depending on build options: https://ffmpeg.org/legal.html
 
 These dependencies retain their own licenses. Before redistributing a packaged app, include the corresponding notices and comply with the bundled FFmpeg build's terms.

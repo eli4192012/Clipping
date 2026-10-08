@@ -6,3 +6,5 @@
 *.json text eol=lf
 *.txt text eol=lf
 *.svg text eol=lf
+# Retain the pinned upstream class map byte-for-byte, including CRLF.
+/vendor/yamnet/yamnet_class_map.csv -text whitespace=cr-at-eol

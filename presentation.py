@@ -22,7 +22,7 @@ def safe_text(text):
     return re.sub(r'[\x00-\x1f]', ' ',str(text)).replace('\\','').replace('{','').replace('}','')
 
 
-def write_ass(path,words,start,end,width,height,burn,title):
+def write_ass(path,words,start,end,width,height,burn,title,emphasis=None,emphasis_style='Bold'):
     size=38 if height>width else max(22,round(height*.048))
     header=f'''[Script Info]
 ScriptType: v4.00+
@@ -38,7 +38,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 '''
     events=[]
     if burn:
-        selected=[w for w in words if w['end']>start and w['start']<end]
+        emphasized=set((emphasis or {}).get('indices',[]))
+        selected=[dict(w,emphasized=i in emphasized) for i,w in enumerate(words) if w['end']>start and w['start']<end]
         groups=[];group=[]
         for w in selected:
             if group and (len(group)>=5 or w.get('segment_id')!=group[-1].get('segment_id') or w['start']-group[-1]['end']>.6 or len(' '.join(x['text'] for x in group))+len(w['text'])>40):groups.append(group);group=[]
@@ -48,7 +49,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             for i,w in enumerate(group):
                 a=max(start,w['start'])-start;b=min(end,w['end'],group[i+1]['start'] if i+1<len(group) else end)-start
                 if b<=a:continue
-                text=' '.join(('{\\c&H70FF80&}'+safe_text(x['text'])+'{\\c&HFFFFFF&}') if j==i else safe_text(x['text']) for j,x in enumerate(group))
+                parts=[]
+                for j,x in enumerate(group):
+                    word=safe_text(x['text'])
+                    if j==i and x.get('emphasized'):
+                        # Inline sizing keeps caption placement stable. Only semantic words animate.
+                        tags=f'\\b1\\fs{round(size*1.14)}\\c&H70FF80&'
+                        if emphasis_style=='Gentle pop':
+                            milliseconds=min(160,max(40,round((b-a)*1000*.7)))
+                            tags+=f'\\fscx108\\fscy108\\t(0,{milliseconds},\\fscx100\\fscy100)'
+                        word='{'+tags+'}'+word+'{\\rCaption}'
+                    elif j==i:word='{\\c&H70FF80&}'+word+'{\\rCaption}'
+                    parts.append(word)
+                text=' '.join(parts)
                 events.append(f'Dialogue: 0,{ass_time(a)},{ass_time(b)},Caption,,0,0,0,,{text}')
     if title.strip():
         text=r'\N'.join(textwrap.wrap(safe_text(title)[:100],30 if height>width else 55))

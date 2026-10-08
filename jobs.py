@@ -2,30 +2,47 @@
 import json
 import time
 from pathlib import Path
-from engine import transcribe,review_candidates
+from engine import transcribe
+from analysis_settings import AnalysisSettings
 from modes import VERSION,speech_candidates,sports_candidates,scan_visuals,refine_sports_boundaries,select_highlights
 from vision_sports import visual_candidates
 from upgrades import signature,transcript_file,worker,scene_times,apply_scene_context,VISION4
+CURATION_API=2
 
 
 def analysis_path(project, settings):
     from content_categories import cache_tag
-    mode=settings['mode']
+    mode=AnalysisSettings.read(settings).mode
     stat=Path(project['source']).stat()
     source_tag=f'{stat.st_size}-{stat.st_mtime_ns}'
     variant='vision'+str(settings['windows']) if mode=='Sports' and settings['vision'] else 'ai' if settings['semantic'] else 'basic'
-    editorial='-shorts1' if settings.get('shorts_editor') and mode!='Sports' else ''
-    return Path(project['folder'])/f"clips-v{VERSION}-{mode}-{settings['minimum']}-{settings['maximum']}-all-{variant}-c{settings.get('coverage',1.0 if mode!='Sports' else .35)}-v514{editorial}-{signature(settings)}-{source_tag}{cache_tag(settings)}.json"
+    from shorts_context import SELECTION_TAG
+    editorial=SELECTION_TAG if settings.get('shorts_editor') and mode!='Sports' else ''
+    from local_editor import cache_tag as editor_tag
+    from multimodal_curation import cache_tag as curation_tag
+    return Path(project['folder'])/f"clips-v{VERSION}-{mode}-{settings['minimum']}-{settings['maximum']}-all-{variant}-c{settings.get('coverage',1.0 if mode!='Sports' else .35)}-v514{editorial}-{signature(settings)}-{source_tag}{cache_tag(settings)}{editor_tag(settings)}{curation_tag(settings)}.json"
+
+
+def timing_key(settings):
+    """Separate measured estimates when the actual editorial workload changes."""
+    from local_editor import cache_tag as editor_tag
+    from multimodal_curation import cache_tag as curation_tag
+    mode=settings['mode']
+    from shorts_context import SELECTION_TAG
+    return mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+(SELECTION_TAG if settings.get('shorts_editor') and mode!='Sports' else '')+editor_tag(settings)+curation_tag(settings)
 
 
 def estimate_seconds(project, settings):
     folder=Path(project['folder'])
     if analysis_path(project,settings).exists():return 1
     history=folder/'ui-timing.json'
-    key=settings['mode']+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and settings['mode']!='Sports' else '')
+    key=timing_key(settings)
     if history.exists():
-        measured=json.loads(history.read_text()).get(key)
-        if measured: return measured
+        from project_store import read
+        import math
+        history_data=read(history,{})
+        measured=history_data.get(key) if isinstance(history_data,dict) else None
+        if isinstance(measured,(int,float)) and math.isfinite(measured) and measured>0:return measured
     transcription=0 if transcript_file(folder,settings).exists() else project['duration']*.5+15
     review=settings['windows']*240 if settings['mode']=='Sports' and settings['vision'] else 10
     if settings['semantic'] and settings['mode']!='Sports':
@@ -43,8 +60,9 @@ def estimate_seconds(project, settings):
             windows=max(1,(max(1,len(sentences))-24+47)//48) if sentences else max(1,round(project['duration']/240))
             count=windows*6
             proposal_seconds=windows*(45 if settings.get('shorts_editor') or settings.get('quality')=='Higher quality' else 20)
-        review=proposal_seconds+count*(45 if settings.get('shorts_editor') else (25 if settings.get('quality')=='Higher quality' else 12))
-    return max(15,transcription+review)+(120 if settings.get('alignment') or settings.get('speakers') else 0)
+        review=proposal_seconds+count*(60 if settings.get('shorts_editor') else (25 if settings.get('quality')=='Higher quality' else 12))
+    extra=project['duration']*.05+settings.get('curation_windows',3)*45 if settings.get('multimodal_curation') else 0
+    return max(15,transcription+review)+(120 if settings.get('alignment') or settings.get('speakers') else 0)+extra
 
 
 def get_transcript(project,settings,progress):
@@ -94,8 +112,10 @@ def analyze(project,settings,progress):
     from project_store import read,write
     import hashlib
     selection_inputs=dict(settings)
-    for key in ('coverage','min_clips','portrait','auto_mode','video_type','category_selection'):selection_inputs.pop(key,None)
-    cache_key=hashlib.sha256(json.dumps([str(source.resolve()),source.stat().st_size,source.stat().st_mtime_ns,transcript,selection_inputs,'reviewed-v514'],sort_keys=True).encode()).hexdigest()
+    for key in ('coverage','min_clips','portrait','auto_mode','video_type','category_selection','multimodal_curation','curation_windows'):selection_inputs.pop(key,None)
+    from shorts_context import SELECTION_TAG
+    review_version='reviewed-v514'+(SELECTION_TAG if settings.get('shorts_editor') and mode!='Sports' else '')
+    cache_key=hashlib.sha256(json.dumps([str(source.resolve()),source.stat().st_size,source.stat().st_mtime_ns,transcript,selection_inputs,review_version],sort_keys=True).encode()).hexdigest()
     reviewed_path=folder/('reviewed-'+cache_key+'.json')
     prior=read(reviewed_path,None)
     if isinstance(prior,dict) and isinstance(prior.get('candidates'),list):
@@ -117,12 +137,12 @@ def analyze(project,settings,progress):
             candidates=refine_sports_boundaries(sports_candidates(transcript['sentences'],samples,total,minimum,maximum),samples,transcript['sentences'],total)
         elif settings['semantic']:
             progress(.62,'Grouping topics and checking complete conversations locally')
-            candidates=worker('topics',dict(sentences=transcript['sentences'],words=transcript['words'] if settings.get('shorts_editor') else [],shorts_editor=settings.get('shorts_editor',False),minimum=minimum,maximum=maximum,mode=mode,quality=settings.get('quality','Balanced'),cache_dir=str(folder/'topic-reviews-v37'),categories=settings.get('categories',[])),timeout=3600,progress=lambda p,label:progress(.62+.31*p,label))
+            candidates=worker('topics',dict(sentences=transcript['sentences'],words=transcript['words'] if settings.get('shorts_editor') else [],shorts_editor=settings.get('shorts_editor',False),minimum=minimum,maximum=maximum,mode=mode,quality=settings.get('quality','Balanced'),editor_model=settings.get('editor_model'),cache_dir=str(folder/'topic-reviews-v37'),categories=settings.get('categories',[])),timeout=3600,progress=lambda p,label:progress(.62+.31*p,label))
         else:
             candidates=speech_candidates(transcript['sentences'],minimum,maximum,mode)
         if settings['semantic'] and mode!='Sports' and candidates and not all(c.get('topic_group') for c in candidates):
             progress(.65,'Reviewing meaning with the selected local model')
-            candidates=worker('review',dict(sentences=transcript['sentences'],candidates=candidates,mode=mode,quality=settings.get('quality','Balanced'),categories=settings.get('categories',[])))
+            candidates=worker('review',dict(sentences=transcript['sentences'],candidates=candidates,mode=mode,quality=settings.get('quality','Balanced'),editor_model=settings.get('editor_model'),categories=settings.get('categories',[])))
         elif mode!='Sports' and not settings['semantic']:
             for c in candidates:
                 c.update(title=c.get('title',c['text'][:65]),passed=False,reason=c.get('reason','Selected from transcript boundaries.'),concern='Local meaning review was not enabled.')
@@ -130,7 +150,7 @@ def analyze(project,settings,progress):
             progress(.93,'Finding scene boundaries')
             candidates=apply_scene_context(candidates,scene_times(source,folder/'scene-cuts-v2.json'),total)
         if candidates and not any(c.get('shorts_editor_error') for c in candidates):write(reviewed_path,dict(candidates=candidates,diagnostics=diagnostics))
-    progress(.95,'Checking openings, useful content and payoff')
+    progress(.94,'Checking openings, useful content and payoff')
     if mode=='Interview':
         from interview_integrity import verify,topic_title
         for c in candidates:
@@ -142,7 +162,11 @@ def analyze(project,settings,progress):
         candidates=[c if c.get('edit_plan') or settings.get('shorts_editor') else protect_endings([c],transcript['words'],total)[0] for c in candidates]
     from audience_quality import annotate
     candidates=annotate(candidates,mode)
-    progress(.97,'Ranking distinct complete moments and saving results')
+    if settings.get('multimodal_curation') and candidates:
+        from multimodal_curation import curate
+        candidates,curation=curate(project,transcript,candidates,settings,lambda p,label:progress(.945+.04*p,label))
+        diagnostics['multimodal_curation']={k:v for k,v in curation.items() if k!='candidates'}
+    progress(.99,'Ranking distinct complete moments and saving results')
     exclusions=[]
     before_count=len(candidates)
     all_drafts=list(candidates)
@@ -160,10 +184,11 @@ def analyze(project,settings,progress):
                 event['status']='Kept' if draft in candidates else 'Excluded: '+next((e['reason'] for e in exclusions if e['start']==draft['start'] and e['end']==draft['end']),'selection limit')
         if not settings['vision']:diagnostics.update(found=before_count,reviewed=0,review_succeeded=0,note='Motion-only drafts; local AI frame review disabled.')
         path.with_suffix('.diagnostics.json').write_text(json.dumps(diagnostics,indent=2))
-    history=folder/'ui-timing.json';data=json.loads(history.read_text()) if history.exists() else {}
-    key=mode+str(settings['vision'])+str(settings['semantic'])+str(settings['windows'])+signature(settings)+('-shorts1' if settings.get('shorts_editor') and mode!='Sports' else '')
+    history=folder/'ui-timing.json';data=read(history,{})
+    if not isinstance(data,dict):data={}
+    key=timing_key(settings)
     if not isinstance(prior,dict):
-        data[key]=time.monotonic()-begun;history.write_text(json.dumps(data))
+        data[key]=time.monotonic()-begun;write(history,data)
     from project_store import save_run
     save_run(project,settings,path)
     progress(1,'Ready to review')

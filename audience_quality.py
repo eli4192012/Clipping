@@ -3,6 +3,7 @@ import re
 
 RUBRIC_VERSION = 'audience-v1'
 CRITERIA = ('opening', 'clarity', 'value', 'payoff')
+CURATION_API=1
 
 
 def validated_review(raw, text):
@@ -49,7 +50,9 @@ def annotate(candidates, mode):
 
 def selection_key(item):
     quality = item.get('audience_quality', {})
-    return (item.get('passed', False), quality.get('basis') == 'Local transcript review', quality.get('score', 0), item.get('rank', 0))
+    from multimodal_curation import valid_priority
+    score=item['multimodal_curation']['ranking_score'] if valid_priority(item) else quality.get('score',0)
+    return (item.get('passed', False), quality.get('basis') == 'Local transcript review', score, item.get('rank', 0))
 
 
 def weak_value(item):

@@ -1,4 +1,5 @@
 """Saved copy for sharing clips, with a 100-character title limit."""
+from app_logging import log_exception
 
 
 def normalize(title,description):
@@ -38,6 +39,7 @@ def show(folder,candidate,words,start,end,quality):
                 result=run_job('publishing-'+key,lambda update:worker('publishing',dict(text=text,quality=quality)),45)
                 saved[key]=normalize(result.get('title',candidate['title']),result.get('description',''))
             except Exception:
+                log_exception('publishing')
                 saved[key]=fallback(candidate,text)
                 saved[key]['fallback']=True
         write(path,saved)
@@ -55,7 +57,9 @@ def show(folder,candidate,words,start,end,quality):
                 result=run_job('publishing-'+key,lambda update:worker('publishing',dict(text=text,quality=quality)),45)
                 saved[key]=normalize(result.get('title',candidate['title']),result.get('description',''))
                 write(path,saved);st.rerun()
-            except Exception as e:st.error(f'Could not generate copy: {e}')
+            except Exception as e:
+                log_exception('publishing')
+                st.error(f'Could not generate copy: {e}')
         with st.form('edit-copy-'+key):
             title=st.text_input('Posting title',value=copy['title'])
             description=st.text_area('Edit description',value=copy['description'])

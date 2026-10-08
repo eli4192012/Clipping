@@ -2,6 +2,16 @@ from huggingface_hub import snapshot_download
 from engine import SPEECH, EDITOR
 
 if __name__ == "__main__":
+    import argparse
+    from local_editor import download_qwen35
+    parser=argparse.ArgumentParser(description='Download local models without uploading videos.')
+    parser.add_argument('--editor-only',action='store_true',help='Install only the pinned Qwen3.5 editor.')
+    args=parser.parse_args()
+    print('Downloading local Qwen3.5 4B editor (4-bit, about 3.06 GB).',flush=True)
+    download_qwen35()
+    if args.editor_only:
+        print('Qwen3.5 ready. Restart or refresh Clipping.',flush=True)
+        raise SystemExit(0)
     print("Downloading speech model (Whisper base). Videos are never uploaded.", flush=True)
     snapshot_download("Systran/faster-whisper-base", local_dir=str(SPEECH),
                       allow_patterns=["*.json", "*.bin", "*.txt"])
@@ -20,5 +30,20 @@ if __name__ == "__main__":
         print('Downloading '+directory,flush=True)
         snapshot_download(repository,local_dir=str(target),allow_patterns=['*.json','*.safetensors','*.npz','*.txt','*.jinja','*.model','*.tiktoken','LICENSE*'])
         (target/'.ready').write_text(repository)
+
+    # Small existing face detector, fetched only during explicit model setup.
+    # Pin the upstream revision; application processing never downloads models.
+    from pathlib import Path
+    import urllib.request
+    target=SPEECH.parent/'face-framing';target.mkdir(parents=True,exist_ok=True)
+    revision='47534e27c9851bb1128ccc0102f1145e27f23f98'
+    for remote,local in [('face_detection_yunet_2023mar.onnx','yunet.onnx'),('LICENSE','LICENSE')]:
+        destination=target/local
+        if not destination.exists():
+            host='media.githubusercontent.com/media' if remote.endswith('.onnx') else 'raw.githubusercontent.com'
+            url=f'https://{host}/opencv/opencv_zoo/{revision}/models/face_detection_yunet/{remote}'
+            temporary=destination.with_suffix(destination.suffix+'.download')
+            urllib.request.urlretrieve(url,temporary)
+            temporary.replace(destination)
 
     print("Models ready. Double-click Start Clipping.command.", flush=True)

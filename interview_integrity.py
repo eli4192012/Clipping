@@ -1,6 +1,7 @@
 """Conservative exchange boundaries and topic-only headings; no face identification."""
 import re
 from interview import is_question,setup_cue,ANSWER_LEAD
+QUESTION_COUNT_API=2
 
 def question(text):
     text=text.strip()
@@ -69,6 +70,47 @@ def question_count(sentences,a,q):
     joined=' '.join(s['text'] for s in sentences[a:q+1])
     if re.search(r'number one.*number two|first question.*second question',joined,re.I):return max(2,count)
     return count or int(bool(texts))
+
+
+def speech_question_count(sentences,words=None):
+    """Keep a short paused continuation of one unfinished question together."""
+    if words is not None:
+        expanded=[]
+        for sentence in sentences:
+            parts=[[]];voice=None
+            for i in sentence.get('indices',[]):
+                label=words[i].get('speaker')
+                if label and voice and label!=voice:parts.append([])
+                parts[-1].append(i)
+                if label:voice=label
+            if not parts[0]:expanded.append(sentence);continue
+            for part in parts:
+                labels={words[i].get('speaker') for i in part if words[i].get('speaker')}
+                expanded.append(dict(text=' '.join(words[i]['text'] for i in part),
+                    start=words[part[0]].get('source_start',words[part[0]]['start']),
+                    end=words[part[-1]].get('source_end',words[part[-1]]['end']),speaker=next(iter(labels)) if len(labels)==1 else None))
+        sentences=expanded
+    count=0;previous=None
+    for sentence in sentences:
+        text=sentence['text'].strip()
+        if question(text):
+            n=max(1,text.count('?'))
+            # Whisper can split "What is ... how you prepare," from
+            # "how you study ...?" at a short pause. A completed question,
+            # answer, voice change or independent capitalized question cannot
+            # use this narrowly defined continuation exception.
+            continuation=bool(previous and question(previous['text'])
+                and re.search(r'[,;]$',previous['text'].strip())
+                and not re.search(r'[.!?]',previous['text'])
+                and re.match(r'^(?:how|whether|or|and|that|which)\b',text)
+                and 0<=sentence['start']-previous['end']<=1.5
+                and not (sentence.get('speaker') and previous.get('speaker')
+                         and sentence['speaker']!=previous['speaker']))
+            count+=max(0,n-1) if continuation else n
+        previous=sentence
+    joined=' '.join(s['text'] for s in sentences)
+    if re.search(r'number one.*number two|first question.*second question',joined,re.I):count=max(count,2)
+    return count
 
 
 def verify(candidate,sentences):
