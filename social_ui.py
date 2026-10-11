@@ -1,4 +1,5 @@
 """Accounts, per-export drafts, explicit publishing and persistent history."""
+from app_logging import log_exception
 import json
 from pathlib import Path
 from urllib.parse import urlparse
@@ -6,23 +7,29 @@ import streamlit as st
 import social_store as store
 import social_auth as auth
 import social_publish as publisher
+SCHEDULE_UI_API = 1
+ACCOUNT_RECOVERY_API = 2
 
 
 def accounts_screen():
     st.title('Accounts')
     st.write('Connect a destination once. Review and publish each clip yourself.')
     st.caption('Clipping stays local. Signing in and publishing use the selected platform. Credentials are saved in macOS Keychain.')
-    for account in store.accounts():
+    accounts=store.accounts()
+    for account in accounts:
         with st.container(border=True):
-            st.subheader(account['name']);st.caption(account['platform'].title()+' · Connected')
+            st.subheader(account['name']);st.caption(account['platform'].title()+(' · Reconnect needed' if account.get('connection_error') else ' · Connected'))
+            if account.get('connection_error'):st.warning(account['connection_error'])
             if st.button('Disconnect',key='disconnect-'+account['id']):
                 try:auth.disconnect(account);st.rerun()
-                except Exception:st.error('Could not remove Keychain credentials. Try again after unlocking your Keychain.')
+                except Exception:
+                    log_exception('social_ui')
+                    st.error('Could not remove Keychain credentials. Try again after unlocking your Keychain.')
     st.caption('Disconnect removes the local login. To revoke access at the platform too, use Google Account permissions or Facebook Business Integrations.')
     yt,ig=st.tabs(['YouTube','Instagram'])
     with yt:
         st.subheader('Connect YouTube')
-        with st.expander('First-time Google setup',expanded=True):
+        with st.expander('First-time Google setup',expanded=not any(a['platform']=='youtube' for a in accounts)):
             st.markdown('1. Create a Google Cloud project and enable **YouTube Data API v3**.\n2. Configure OAuth consent and add your Google account as a test user.\n3. Create an **OAuth client → Desktop app** and download its JSON.\n4. Upload it below, then connect your channel.')
             st.link_button('Open Google Cloud credentials','https://console.cloud.google.com/apis/credentials')
             st.info('New unaudited API projects may only upload private videos, even when you choose another visibility. Google test-mode logins may also need reconnecting.')
@@ -30,10 +37,15 @@ def accounts_screen():
             if st.button('Save Google setup',disabled=uploaded is None):
                 try:auth.secret('config:youtube',auth.google_config(json.loads(uploaded.getvalue())));st.success('Saved securely in Keychain.')
                 except ValueError as e:st.error(str(e))
-                except Exception:st.error('Could not save setup to macOS Keychain.')
+                except Exception:
+                    log_exception('social_ui')
+                    st.error('Could not save setup to macOS Keychain.')
+        if any(a['platform']=='youtube' for a in accounts):st.caption('To reconnect, use Connect YouTube with the same Google account and channel. Your saved app setup and posts stay saved.')
         if st.button('Connect YouTube'):
             try:st.session_state['social_google']=auth.begin_google()
-            except Exception:st.error('Save valid Google setup and unlock Keychain before connecting.')
+            except Exception:
+                log_exception('social_ui')
+                st.error('Save valid Google setup and unlock Keychain before connecting.')
         pending=st.session_state.get('social_google')
         if pending:
             st.link_button('Sign in with Google',pending['url'])
@@ -41,7 +53,9 @@ def accounts_screen():
             if st.button('Finish connecting YouTube'):
                 try:auth.finish_google(pending);st.session_state.pop('social_google',None);st.rerun()
                 except auth.SocialError as e:st.error(str(e))
-                except Exception:st.error('Connection failed. Start a new login and check Google setup.')
+                except Exception:
+                    log_exception('social_ui')
+                    st.error('Connection failed. Start a new login and check Google setup.')
     with ig:
         st.subheader('Connect Instagram')
         st.info('Direct local uploads require a Creator or Business Instagram account linked to a Facebook Page, plus a Meta app with Facebook Login for Business.')
@@ -60,10 +74,14 @@ def accounts_screen():
                         st.error('Enter both numeric IDs, an app secret and a valid HTTPS callback URL without query parameters.')
                     else:
                         try:auth.secret('config:instagram',dict(client_id=app_id,client_secret=app_secret,config_id=config_id,redirect_uri=redirect));st.success('Saved securely in Keychain.')
-                        except Exception:st.error('Could not save setup to macOS Keychain.')
+                        except Exception:
+                            log_exception('social_ui')
+                            st.error('Could not save setup to macOS Keychain.')
         if st.button('Connect Instagram'):
             try:st.session_state['social_meta']=auth.begin_meta()
-            except Exception:st.error('Save Meta setup and unlock Keychain before connecting.')
+            except Exception:
+                log_exception('social_ui')
+                st.error('Save Meta setup and unlock Keychain before connecting.')
         pending=st.session_state.get('social_meta')
         if pending:
             st.link_button('Sign in with Facebook for Instagram',pending['url'])
@@ -72,7 +90,9 @@ def accounts_screen():
                 if st.form_submit_button('Finish connecting Instagram'):
                     try:auth.finish_meta(pending,callback);st.session_state.pop('social_meta',None);st.rerun()
                     except auth.SocialError as e:st.error(str(e))
-                    except Exception:st.error('Connection failed. Start a new login and check Meta setup.')
+                    except Exception:
+                        log_exception('social_ui')
+                        st.error('Connection failed. Start a new login and check Meta setup.')
     with st.expander('Setup guide & platform requirements'):
         st.markdown((store.ROOT/'SOCIAL_SETUP.md').read_text())
 
@@ -85,11 +105,15 @@ def draft_panel(draft):
     if draft.get('project_deleted'):
         st.info('This project was deleted. Posting history is kept, but publishing is disabled for this draft.')
         return
+    from social_schedule_ui import schedule_panel
+    if schedule_panel(draft,'history'):return
     if draft['status']=='Failed' and '-attempt-' not in draft['id']:
         if st.button('Start a new draft after this failure',key='retry-'+draft['id']):
             try:publisher.retry_failed(draft['id']);st.rerun()
             except auth.SocialError as e:st.error(str(e))
-            except Exception:st.error('Could not reset this attempt. The history was preserved.')
+            except Exception:
+                log_exception('social_ui')
+                st.error('Could not reset this attempt. The history was preserved.')
     if draft['status']=='Published':
         st.success('Publication confirmed. This clip is marked Used.')
         if draft['platform']=='youtube':st.caption('Actual YouTube visibility: '+draft.get('actual_privacy','unknown'))
@@ -100,7 +124,9 @@ def draft_panel(draft):
                 with st.spinner('Checking the platform…'):publisher.check(draft['id'])
                 st.rerun()
             except auth.SocialError as e:st.error(str(e))
-            except Exception:st.error('Could not check status. Your saved attempt is unchanged.')
+            except Exception:
+                log_exception('social_ui')
+                st.error('Could not check status. Your saved attempt is unchanged.')
     resumable=draft['platform']=='youtube' and draft['status'] in ('Uploading','Needs check')
     if draft['status'] in ('Draft','Ready') or resumable:
         with st.expander('Review before publishing',expanded=True):
@@ -122,7 +148,18 @@ def draft_panel(draft):
                         publisher.publish(draft['id'],lambda p,msg:progress.progress(min(1.,max(0.,p)),text=msg),expected_updated=draft['updated'])
                         st.rerun()
                     except (auth.SocialError,ValueError) as e:st.error(str(e))
-                    except Exception:st.error('Publishing could not start. Check account setup and the saved attempt.')
+                    except Exception:
+                        log_exception('social_ui')
+                        st.error('Publishing could not start. Check account setup and the saved attempt.')
+
+
+def platform_default_copy(platform,copy):
+    """Only defaults for NEW drafts; existing reviewed text remains authoritative."""
+    post=copy.get('platforms',{}).get('Instagram Reels') if platform=='instagram' else None
+    if post:
+        from social_copy import inline_caption
+        return dict(title=copy['title'],description=inline_caption(post.get('caption',''),post.get('hashtags',[])))
+    return dict(title=copy['title'],description=copy['description'])
 
 
 def composer(folder,run,candidate,video,render_id,copy):
@@ -135,11 +172,17 @@ def composer(folder,run,candidate,video,render_id,copy):
         account=next(a for a in accounts if a['id']==account_id)
         key=store.identity(folder,run,candidate,account_id,render_id);draft=store.get(key)
         if draft is None or draft['status']=='Draft':
-            initial=draft or dict(title=copy['title'],description=copy['description'],privacy='private',made_for_kids=None,share_to_feed=True)
+            initial=draft or dict(platform_default_copy(account['platform'],copy),privacy='private',made_for_kids=None,share_to_feed=True)
+            override_key='draft-copy-override-'+key
+            suggested=platform_default_copy(account['platform'],copy)
+            if draft and any(draft.get(k)!=suggested[k] for k in ('title','description')):
+                if st.button('Use current posting text in this draft',key='apply-copy-'+key):
+                    st.session_state[override_key]=suggested;st.rerun()
+            if override_key in st.session_state:initial=dict(initial,**st.session_state[override_key])
             with st.form('social-draft-'+key):
                 title=st.text_input('YouTube title' if account['platform']=='youtube' else 'Draft title · only for your records',value=initial['title'],max_chars=100)
                 description=st.text_area('Description' if account['platform']=='youtube' else 'Instagram caption',value=initial['description'],height=150)
-                st.caption('You can add hashtags here if wanted. They are not generated automatically.')
+                st.caption('Review the suggested text and hashtags; they do not guarantee reach.' if copy.get('platforms') else 'You can add hashtags here if wanted. They are not generated automatically.')
                 if account['platform']=='youtube':
                     privacy=st.selectbox('Visibility',['private','unlisted','public'],index=['private','unlisted','public'].index(initial['privacy']))
                     audience=st.selectbox('Is this video made for kids?',['Choose…','Yes','No'],index=0 if initial['made_for_kids'] is None else (1 if initial['made_for_kids'] else 2))
@@ -150,7 +193,7 @@ def composer(folder,run,candidate,video,render_id,copy):
                 submitted=st.form_submit_button('Save draft & review')
             if submitted:
                 new=dict(id=key,folder=str(folder),run=str(run),candidate={'start':candidate['start'],'end':candidate['end']},render_id=render_id,video=str(video),file_size=Path(video).stat().st_size,file_mtime=Path(video).stat().st_mtime_ns,account_id=account_id,account_name=account['name'],platform=account['platform'],title=title.strip(),description=description,privacy=privacy,made_for_kids=kids,share_to_feed=feed,status='Draft')
-                try:store.validate(new);store.save_draft(new);st.rerun()
+                try:store.validate(new);store.save_draft(new);st.session_state.pop(override_key,None);st.rerun()
                 except ValueError as e:st.error(str(e))
         if draft:draft_panel(draft)
 

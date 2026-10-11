@@ -4,7 +4,7 @@ configure()
 import json
 import sys
 from pathlib import Path
-from upgrades import TURBO,EDITOR4,SPEAKERS,sentences_from_words,assign_speakers
+from upgrades import TURBO,SPEAKERS,sentences_from_words,assign_speakers
 
 def run(task,p,progress=lambda p,label:None):
     if task!='speech_details':
@@ -22,43 +22,54 @@ def run(task,p,progress=lambda p,label:None):
         words=[dict(start=float(w['start']),end=float(w['end']),text=w['word'].strip()) for s in result['segments'] for w in s.get('words',[]) if w['word'].strip()]
         return dict(language=result['language'],words=words,sentences=sentences_from_words(words),backend='Whisper large-v3-turbo / MLX')
     if task=='publishing':
-        from mlx_lm import load,generate
-        from mlx_lm.sample_utils import make_sampler
-        from engine import EDITOR,parse_json
-        model,tokenizer=load(str(EDITOR4 if p.get('quality')=='Higher quality' else EDITOR))
+        from local_editor import load_bundle
+        from engine import parse_json
+        model,tokenizer,generate,sampler=load_bundle(p)
         prompt='Write posting copy for this transcript DATA. Return JSON title (specific short headline), description (1–2 sentences). Title must be at most 100 characters including spaces. Do not generate hashtags. Preserve uncertainty, no invented results or unsupported hype. Only describe what the clip says. Transcript: '+json.dumps(p['text'])
         formatted=tokenizer.apply_chat_template([dict(role='user',content=prompt)],tokenize=False,add_generation_prompt=True,enable_thinking=False)
-        return parse_json(generate(model,tokenizer,prompt=formatted,max_tokens=300,sampler=make_sampler(temp=0),verbose=False))
+        return parse_json(generate(model,tokenizer,prompt=formatted,max_tokens=300,sampler=sampler,verbose=False))
+    if task=='curation_visual':
+        from curation_vision import generate_local
+        return generate_local(p['frames'],p['model_path'],progress)
+    if task=='opening_hook':
+        from local_editor import load_bundle
+        from opening_hooks import generate_local
+        return generate_local(p['text'],p.get('opening_speech',''),p.get('style_lessons',[]),load_bundle(p,large=True),progress)
+    if task=='ending_review':
+        from local_editor import load_bundle
+        from ending_review import generate_local
+        return generate_local(p['data'],load_bundle(p,large=True),progress)
+    if task=='social_copy':
+        from local_editor import load_bundle
+        from social_copy import generate_local
+        if not p.get('text','').strip():raise ValueError('This clip needs a speech transcript for AI posting text.')
+        return generate_local(p['text'],load_bundle(p,large=True),progress,style=p.get('posting_style',{}))
     if task=='headline':
-        from mlx_lm import load,generate
-        from mlx_lm.sample_utils import make_sampler
-        from engine import EDITOR
+        from local_editor import load_bundle
         from polish import title_for
-        model,tokenizer=load(str(EDITOR4 if p.get('quality')=='Higher quality' else EDITOR))
-        return {'title':title_for(p['text'],model,tokenizer,generate,make_sampler(temp=0))}
+        model,tokenizer,generate,sampler=load_bundle(p)
+        return {'title':title_for(p['text'],model,tokenizer,generate,sampler)}
     if task=='topics':
         from topic_cache import reviewed_topics
         def load_bundle():
-            from mlx_lm import load,generate
-            from mlx_lm.sample_utils import make_sampler
-            from engine import EDITOR
-            model,tokenizer=load(str(EDITOR4 if p.get('shorts_editor') or p['quality']=='Higher quality' else EDITOR))
-            return model,tokenizer,generate,make_sampler(temp=0)
+            from local_editor import load_bundle as load_editor
+            return load_editor(p,large=bool(p.get('shorts_editor')))
         return reviewed_topics(p,load_bundle,progress)
     if task=='shorts_edit':
         from shorts_editor import edit_candidate
+        from local_editor import selected_editor,IDENTITIES
         def load_bundle():
-            from mlx_lm import load,generate
-            from mlx_lm.sample_utils import make_sampler
-            from engine import EDITOR
-            model,tokenizer=load(str(EDITOR4))
-            return model,tokenizer,generate,make_sampler(temp=0)
+            from local_editor import load_bundle as load_editor
+            return load_editor(p,large=True)
         return edit_candidate(p['candidate'],p['sentences'],p['words'],p['maximum'],p['quality'],p['cache_dir'],
-            load_bundle,p.get('variant','Balanced'),p.get('baseline'),progress)
+            load_bundle,p.get('variant','Balanced'),p.get('baseline'),progress,
+            editor_identity=IDENTITIES[selected_editor(p,large=True)] if p.get('editor_model') else None,
+            minimum=p.get('minimum',20),mode=p.get('mode','Podcast'))
     if task=='review':
         import engine
-        if p['quality']=='Higher quality':engine.EDITOR=EDITOR4
-        return engine.review_candidates(p['sentences'],p['candidates'],mode=p['mode'],categories=p.get('categories',[]))
+        from local_editor import load_bundle
+        return engine.review_candidates(p['sentences'],p['candidates'],mode=p['mode'],categories=p.get('categories',[]),
+            bundle=load_bundle(p))
     if task=='speech_details':
         import numpy as np
         import subprocess,imageio_ffmpeg

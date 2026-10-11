@@ -16,6 +16,10 @@ def delete_project(folder, root=None, trash=None):
     if folder.is_symlink() or folder.resolve().parent!=data or not folder.is_dir():
         raise ValueError('Only an existing project directly inside Clipping/data can be deleted.')
     folder=folder.resolve()
+    if (root/'data/clipping-queue.sqlite3').exists():
+        from clip_queue import QueueStore
+        if QueueStore(root).active_for(folder):
+            raise ValueError('Remove this video from the queue, or wait for it to finish, before deleting its project.')
     if not isinstance(read(folder/'project.json',None),dict) and not read(folder/'import.json',{}).get('filename'):
         raise ValueError('This folder is not a saved Clipping project.')
     with ExitStack() as stack:

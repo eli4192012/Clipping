@@ -1,3 +1,4 @@
+from app_logging import log_exception
 import hashlib
 import json
 from pathlib import Path
@@ -24,7 +25,9 @@ def show(project,settings,go):
             key=hashlib.sha256(json.dumps([project,settings,pending],sort_keys=True).encode()).hexdigest()[:16]
             result=run_job('compare-'+key,lambda update:compare(project,settings,pending,update),240)
             st.session_state.comparison_result=result
-        except Exception as error:st.error(str(error))
+        except Exception as error:
+            log_exception('comparison_ui')
+            st.error(str(error))
         finally:st.session_state.pop('comparison_pending',None)
     path=st.session_state.get('comparison_result')
     if path and Path(path).exists():

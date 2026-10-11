@@ -5,7 +5,8 @@ CUES=[('touchdown',r'\btouchdown\b',10),('turnover',r'\b(?:intercept(?:ed|ion)?|
 def cue_anchor(sentence,pattern,words):
     timed=[w for w in words if w['end']>sentence['start'] and w['start']<sentence['end']]
     if timed:
-        text=' '.join(w['text'] for w in timed);match=re.search(pattern,text,re.I)
+        text=' '.join(w['text'] for w in timed)
+        match=re.search(pattern,text,re.I)
         if match:
             offset=0
             for w in timed:

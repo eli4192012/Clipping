@@ -1,0 +1,47 @@
+name: App checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fresh-install-and-tests:
+    runs-on: macos-15 # Standard Apple Silicon runner, matching the local MLX app.
+    timeout-minutes: 25
+    env:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      VECLIB_MAXIMUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements.lock.txt
+            requirements-dev.txt
+      - name: Install pinned dependencies in a fresh environment
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements.lock.txt -r requirements-dev.txt
+          .venv/bin/python -m pip check
+      - name: Check direct pins and core imports without model downloads
+        run: .venv/bin/python scripts/check_install.py
+      - name: Check syntax and undefined names in first-party code
+        run: .venv/bin/ruff check .
+      - name: Regression tests including real video exports
+        run: .venv/bin/python -m unittest discover -s tests -q

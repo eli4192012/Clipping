@@ -4,6 +4,8 @@ Create a Google Cloud project, enable YouTube Data API v3, configure the consent
 
 YouTube uses a local loopback callback and PKCE. Upload and read-only scopes allow publishing, channel identification and processing checks. Access tokens, refresh tokens, client configuration and upload-session addresses are stored in macOS Keychain. Test-mode credentials may expire and need reconnecting. Google may require app verification/audit for broader use or public uploads. New unaudited projects have private-only upload restrictions.
 
+If Google returns `invalid_grant`, the saved YouTube login has expired or been revoked. Open **Accounts → Connect YouTube**, sign in with the Google account and channel used for Indy Audible, then click **Finish connecting YouTube**. Reuse the saved Google app setup; disconnecting, deleting clips and creating a new Cloud project are not required. Your saved drafts, titles, exports and previous upload receipts stay saved. OAuth apps in Google's external Testing mode normally receive seven-day refresh tokens for these scopes. [Google token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration)
+
 [Google Desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app) · [YouTube uploads and restrictions](https://developers.google.com/youtube/v3/docs/videos/insert)
 
 ### Instagram

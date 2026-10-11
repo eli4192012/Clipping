@@ -1,4 +1,5 @@
 """Choose one checked edit, inspect its decisions, request other edits only on demand."""
+from app_logging import log_exception
 import hashlib
 import json
 from project_store import read, write
@@ -21,13 +22,15 @@ def choose_edit(folder, analysis, candidate, transcript, settings):
         if settings['mode'] != 'Sports' and st.button('Create a Shorts edit locally', key='shorts-'+identity):
             try:
                 result = run_job('shorts-'+identity, lambda update:worker('shorts_edit', dict(candidate=source,
-                    sentences=transcript['sentences'], words=transcript['words'], maximum=settings['maximum'],
-                    quality=settings.get('quality','Balanced'), cache_dir=str(folder/'topic-reviews-v37/shorts')),
+                    sentences=transcript['sentences'], words=transcript['words'], maximum=settings['maximum'],minimum=settings['minimum'],mode=settings['mode'],
+                    quality=settings.get('quality','Balanced'), editor_model=settings.get('editor_model'), cache_dir=str(folder/'topic-reviews-v37/shorts')),
                     progress=update), 60)
                 saved[identity] = dict(edits, Balanced=result)
                 write(saved_path, saved)
                 st.rerun()
-            except Exception as error: st.warning('A safe Shorts edit was not produced: '+str(error))
+            except Exception as error:
+                log_exception('shorts_ui')
+                st.warning('A safe Shorts edit was not produced: '+str(error))
         return candidate, 'Original moment'
     choices = [name for name in ('Balanced','Fast','Full Context') if name in edits] + ['Original moment']
     key = 'edit-variant-'+identity
@@ -46,15 +49,17 @@ def choose_edit(folder, analysis, candidate, transcript, settings):
         if st.button('Create '+name+' edit locally', key='generate-'+name+identity, help=option['reason']):
             try:
                 baseline = {k:primary['edit_plan'][k] for k in ('ranges','recommended_duration','final_transcript')}
-                result = run_job('variant-'+name+identity, lambda update:worker('shorts_edit', dict(candidate=source,
-                    sentences=transcript['sentences'], words=transcript['words'], maximum=settings['maximum'],
-                    quality=settings.get('quality','Balanced'), cache_dir=str(folder/'topic-reviews-v37/shorts'),
+                result = run_job('variant-'+name+identity, lambda update,name=name,baseline=baseline:worker('shorts_edit', dict(candidate=source,
+                    sentences=transcript['sentences'], words=transcript['words'], maximum=settings['maximum'],minimum=settings['minimum'],mode=settings['mode'],
+                    quality=settings.get('quality','Balanced'), editor_model=settings.get('editor_model'), cache_dir=str(folder/'topic-reviews-v37/shorts'),
                     variant=name, baseline=baseline), progress=update), 60)
                 saved[identity] = dict(edits, **{name:result},_selected=name)
                 write(saved_path, saved)
                 st.session_state['pending-'+key] = name
                 st.rerun()
-            except Exception as error: st.warning('This source did not produce a verified '+name+' edit: '+str(error))
+            except Exception as error:
+                log_exception('shorts_ui')
+                st.warning('This source did not produce a verified '+name+' edit: '+str(error))
     return chosen, selected
 
 
@@ -67,7 +72,13 @@ def decisions(candidate):
     with st.expander('Shorts editing decisions'):
         st.caption('Local model checks are estimates. Listen to the joins and compare the source before posting.')
         st.write(plan['standalone_context_check']['reason'])
+        evidence=plan.get('validation',{}).get('context_evidence',{})
+        if evidence:
+            for name in ('subject','explanation','conclusion'):
+                if evidence.get(name):st.write(name.capitalize()+': “'+evidence[name]+'”')
+        if plan.get('context_restored_ids'):st.caption('Kept additional speech to finish the selected sentences and preserve their context.')
         st.caption(plan.get('decision_basis','Local editor proposal'))
+        if plan.get('editor_model'):st.caption('AI editor: '+plan['editor_model'].split(':',1)[0])
         st.dataframe([dict(role=r['role'], start=round(r['start'],3), end=round(r['end'],3), reason=r['reason']) for r in plan['ranges']], hide_index=True)
         if plan['removed_ranges']:
             st.write('Removed speech')

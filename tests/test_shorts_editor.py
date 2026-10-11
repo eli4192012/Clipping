@@ -28,7 +28,9 @@ def fixture():
         meaning_preserved=True, ending_complete=True, title='The best cut is no cut',
         description='Why keeping momentum matters.', supported_variants=[])
     verdict = dict(standalone=True,faithful=True,complete_ending=True,metadata_grounded=True,reason='A complete explanation.',
-        audience_review={k:dict(rating=2,evidence='best cut') for k in ('opening','clarity','value','payoff')})
+        audience_review={k:dict(rating=2,evidence='best cut') for k in ('opening','clarity','value','payoff')},
+        context_evidence=dict(subject='The best cut',explanation='You keep your speed',conclusion='speed and momentum.'),
+        short_complete_reason='The complete idea explains that avoiding a cut preserves speed and momentum.')
     return candidate,sentences,words,raw,verdict
 
 

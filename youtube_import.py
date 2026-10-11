@@ -6,7 +6,14 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import imageio_ffmpeg
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
 from engine import ROOT, duration
+YOUTUBE_IMPORT_API = 3
+HLS_FORMAT = 'bv*[height<=720][ext=mp4][protocol^=m3u8]+ba[protocol^=m3u8]/b[height<=720][protocol^=m3u8]'
+
+
+class UnfinishedVideo(ValueError):
+    pass
 
 
 def normalize_url(value):
@@ -55,15 +62,17 @@ def lookup(value):
     url, video_id = normalize_url(value)
     with YoutubeDL(options()) as downloader:
         info = downloader.extract_info(url, download=False)
-    if not info or info.get('is_live') or info.get('live_status') == 'is_upcoming':
-        raise ValueError('Use a finished video. Live and upcoming streams are not supported.')
+    if not info or info.get('is_live') or info.get('live_status') in ('is_live', 'is_upcoming', 'post_live'):
+        raise UnfinishedVideo('Use a finished video. Live and upcoming streams are not supported.')
     return {'id': video_id, 'url': url, 'title': info.get('title') or video_id,
-            'channel': info.get('uploader') or '', 'duration': info.get('duration') or 0}
+            'channel': info.get('uploader') or '', 'channel_id': info.get('channel_id') or '',
+            'published': info.get('release_timestamp') or info.get('timestamp'),
+            'duration': info.get('duration') or 0}
 
 
-def download(metadata, progress=lambda message: None):
+def download(metadata, progress=lambda message: None, root=None):
     url, video_id = normalize_url(metadata['url'])
-    folder = ROOT / 'data' / ('youtube-' + video_id)
+    folder = Path(root or ROOT) / 'data' / ('youtube-' + video_id)
     folder.mkdir(parents=True, exist_ok=True)
     manifest = folder / 'import.json'
     if manifest.exists():
@@ -85,8 +94,16 @@ def download(metadata, progress=lambda message: None):
     opts.update({'format': 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]',
                  'merge_output_format': 'mp4', 'outtmpl': str(folder / 'source.%(ext)s'),
                  'max_filesize': 4 * 1024**3, 'progress_hooks': [hook]})
-    with YoutubeDL(opts) as downloader:
-        downloader.extract_info(url, download=True)
+    try:
+        with YoutubeDL(opts) as downloader:
+            downloader.extract_info(url, download=True)
+    except DownloadError as error:
+        if not re.search(r'HTTP Error 403\b',str(error),re.I):raise
+        # Re-extract fresh URLs once, using YouTube's available HLS formats.
+        # This keeps the same resolution/size limits without account cookies.
+        progress('YouTube refused the download; trying its streaming format…')
+        with YoutubeDL(dict(opts,format=HLS_FORMAT)) as downloader:
+            downloader.extract_info(url,download=True)
     sources = [p for p in folder.glob('source.*') if p.suffix in ('.mp4', '.mkv', '.webm', '.mov')]
     if not sources:
         raise ValueError('YouTube did not provide a downloadable video within the size limit.')
