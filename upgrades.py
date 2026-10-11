@@ -10,6 +10,7 @@ TURBO=ROOT/'models/whisper-turbo'
 EDITOR4=ROOT/'models/qwen3-4b'
 VISION4=ROOT/'models/sports-vision-4b'
 SPEAKERS=ROOT/'models/speakers'
+WORKER_API=2
 
 def signature(settings):
     return hashlib.sha256(json.dumps({k:settings.get(k,v) for k,v in [('quality','Balanced'),('scenes',False),('speakers',False),('alignment',False)]},sort_keys=True).encode()).hexdigest()[:10]
@@ -21,14 +22,15 @@ def transcript_file(folder,settings):
     legacy=Path(folder)/('transcript-'+signature(dict(settings,scenes=True))+'.json')
     return legacy if not canonical.exists() and legacy.exists() else canonical
 
-def worker(task,payload,timeout=3600,progress=None):
+def worker(task,payload,timeout=3600,progress=None,progress_timeout=False):
     with tempfile.TemporaryDirectory(prefix='clipping-') as temp:
         request=Path(temp)/'request.json';result=Path(temp)/'result.json'
         request.write_text(json.dumps(dict(task=task,payload=payload,result=str(result))))
         env=dict(os.environ,HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',PYANNOTE_METRICS_ENABLED='0')
         executable=str(ROOT/'.venv-speech/bin/python') if task=='speech_details' else sys.executable
         from local_worker_process import run_local
-        return run_local([executable,str(ROOT/'quality_worker.py'),str(request)],request,result,env,timeout,progress)
+        return run_local([executable,str(ROOT/'quality_worker.py'),str(request)],request,result,env,timeout,progress,
+                         progress_timeout=progress_timeout)
 
 
 def sentences_from_words(words):

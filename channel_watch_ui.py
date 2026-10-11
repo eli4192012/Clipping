@@ -8,7 +8,7 @@ from channel_watch import WatchStore, ensure_watcher, watcher_alive
 from clip_queue import QueueStore
 from youtube_channels import discover, UPLOAD_LIMIT
 from project_store import library, read
-CHANNEL_FORM_API = 2
+CHANNEL_FORM_API = 3
 
 
 def presets(root):
@@ -91,14 +91,14 @@ def show(root, go):
                     from app_logging import redact, log_exception
                     log_exception('Connect source channel failed')
                     st.error(redact(str(error)) or 'Could not connect this channel. Check its public link and try again.')
-                else:st.success('Watching '+channel['name']+'. Eligible uploads will appear in Video queue.')
+                else:st.success('Watching '+channel['name']+'. Eligible uploads will be clipped and exported automatically; open the finished clips below.')
     st.caption('Watching prevents idle sleep while the watcher runs. Keep this Mac powered on and online. Closing its lid still requires your keep-awake setup; shutdown stops watching. Opening the app again resumes saved channel watches. Each check looks at the latest '+str(UPLOAD_LIMIT)+' regular uploads.')
     if st.button('Open video queue'):go('queue')
-    live_channels(root)
+    live_channels(root,go)
 
 
 @st.fragment(run_every=3)
-def live_channels(root):
+def live_channels(root,go):
     store = WatchStore(root)
     channels = store.channels()
     if not channels:
@@ -129,9 +129,36 @@ def live_channels(root):
             c.link_button('View source channel',channel['url'])
             st.caption('Pausing watching stops new discoveries. Already queued videos continue unless you also pause Video queue.')
             videos = [v for v in store.videos(identity) if v['state']!='old']
+            items = {v['queue_id']:queue.get(v['queue_id']) for v in videos if v['queue_id']}
+            ready = [(v,items[v['queue_id']]) for v in videos if v['queue_id'] and items.get(v['queue_id'])
+                     and items[v['queue_id']]['result'] and Path(items[v['queue_id']]['result']).is_file()]
+            exported = sum(Path(clip['video']).is_file() for _,item in ready for clip in item['exports'])
+            a,b,c = st.columns(3)
+            a.metric('Ready clips',exported)
+            b.metric('Processing videos',sum(item['state']=='running' for item in items.values() if item))
+            c.metric('Waiting videos',sum(item['state']=='queued' for item in items.values() if item))
+            for item in items.values():
+                if item and item['state']=='running':
+                    st.write('Making clips · '+item['project']['title'])
+                    st.progress(min(.99,max(0.,item['progress'])),text=item['label'])
+                elif item and item['state']=='queued' and item['retry_at']:
+                    wait=max(0,int(item['retry_at']-time.time()))
+                    timing=f'in about {wait} seconds' if wait else 'waiting for its turn'
+                    st.info('Automatic retry · '+item['project']['title']+' · '+timing+'. Saved work will be reused.')
+            if ready:st.markdown('**Your automatically selected clips**')
+            for video,item in ready:
+                count = sum(Path(clip['video']).is_file() for clip in item['exports'])
+                st.write(video['title'])
+                if count:st.caption(f'{count} captioned '+('clip ready' if count==1 else 'clips ready'))
+                else:st.caption('Selection saved · '+item['label'])
+                if st.button('Open clips',key='watch-open-'+item['id']):
+                    st.session_state.project=item['project'];st.session_state.settings=item['settings']
+                    st.session_state.result_path=item['result'];go('results')
+            if not ready and not any(items.values()):
+                st.info('Eligible uploads will be downloaded, clipped and exported automatically. Finished clips will appear here.')
             with st.expander(f'Upload history · {len(videos)}'):
                 for video in videos[:30]:
-                    item = queue.get(video['queue_id']) if video['queue_id'] else None
+                    item = items.get(video['queue_id'])
                     state = item['state'] if item else video['state']
                     st.write(video['title']+' · '+{'queued':'In video queue','running':'Processing','done':'Complete',
                              'failed':'Needs attention','skipped':'Skipped: too old or unfinished','cancelled':'Removed from queue',

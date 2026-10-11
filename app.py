@@ -11,12 +11,16 @@ from interview import interview_content
 from vision_sports import VISION,football_hint
 from modes import PROFILES
 import youtube_import
-if getattr(youtube_import,'YOUTUBE_IMPORT_API',0)<2:
+if getattr(youtube_import,'YOUTUBE_IMPORT_API',0)<3:
     import importlib
     importlib.reload(youtube_import)
 from youtube_import import lookup,download,normalize_url
+import local_worker_process,upgrades
+if getattr(local_worker_process,'LOCAL_WORKER_API',0)<3 or getattr(upgrades,'WORKER_API',0)<2:
+    import importlib
+    importlib.reload(local_worker_process);importlib.reload(upgrades)
 import jobs,audience_quality
-if getattr(jobs,'CURATION_API',0)<2 or getattr(audience_quality,'CURATION_API',0)<1:
+if getattr(jobs,'CURATION_API',0)<3 or getattr(audience_quality,'CURATION_API',0)<1:
     import importlib
     importlib.reload(audience_quality);importlib.reload(jobs)
 from jobs import analyze,analysis_path,estimate_seconds
@@ -53,16 +57,33 @@ with st.container(key='release-header'):
 st.session_state.setdefault('page','library')
 page=st.session_state.page
 import clip_queue
-if getattr(clip_queue,'QUEUE_API',0)<2:
+if getattr(clip_queue,'QUEUE_API',0)<4:
     import importlib
     importlib.reload(clip_queue)
 from clip_queue import resume_enabled_queue
 resume_enabled_queue(ROOT)
+import channel_watch
+if getattr(channel_watch,'WATCH_API',0)<2:
+    import importlib
+    importlib.reload(channel_watch)
 from channel_watch import ensure_watcher
 ensure_watcher(ROOT)
+import social_store,social_publish,social_ui,social_auth
+if not getattr(social_auth,'AUTH_ERROR_API',0) or not getattr(social_store,'SCHEDULE_API',0) or getattr(social_publish,'PUBLISH_WORKSPACE_API',0)<3 or getattr(social_ui,'ACCOUNT_RECOVERY_API',0)<2:
+    import importlib
+    importlib.reload(social_auth);importlib.reload(social_store);importlib.reload(social_publish);importlib.reload(social_ui)
+from social_schedule import ensure_scheduler
+ensure_scheduler(ROOT)
+import social_copy,publishing_workspace
+if not getattr(social_copy,'COPY_CACHE_API',0):
+    import importlib
+    importlib.reload(social_copy)
+if getattr(publishing_workspace,'WORKSPACE_API',0)<5:
+    import importlib
+    importlib.reload(publishing_workspace)
 stages=['source','settings','processing','complete','results','editor']
 active=0 if page=='source' else 1 if page=='settings' else 2 if page=='processing' else 3
-if page not in ('library','source','accounts','social_history','combine','examples','before_after','queue','channels'):
+if page not in ('library','source','accounts','social_history','publishing','combine','examples','before_after','queue','channels'):
     st.markdown('<nav class="steps" aria-label="Project progress">'+ '<span class="step-connector" aria-hidden="true">—</span>'.join(f'<span class="step {"active" if i==active else "done" if i<active else ""}" '+('aria-current="step"' if i==active else '')+f'><span class="step-number">{"✓" if i<active else f"{i+1:02}"}</span>{name}</span>' for i,name in enumerate(['Add video','Make it yours','Find moments','Review clips']))+'</nav>',unsafe_allow_html=True)
 
 
@@ -92,6 +113,7 @@ with st.sidebar:
     if page!='processing' and st.button('Example library',icon=':material/bookmarks:',use_container_width=True,type='primary' if page=='examples' else 'secondary'):go('examples')
     if page!='processing' and st.button('Before & after',icon=':material/compare:',use_container_width=True,type='primary' if page=='before_after' else 'secondary'):go('before_after')
     if page!='processing' and st.button('Accounts',icon=':material/group:',use_container_width=True):go('accounts')
+    if page!='processing' and st.button('Publishing',icon=':material/send:',use_container_width=True,type='primary' if page=='publishing' else 'secondary'):go('publishing')
     if page!='processing' and st.button('Publishing history',icon=':material/history:',use_container_width=True):go('social_history')
     st.divider()
     with st.expander('Local tools & status'):
@@ -102,7 +124,7 @@ with st.sidebar:
 
 if page=='channels':
     import channel_watch_ui
-    if getattr(channel_watch_ui,'CHANNEL_FORM_API',0)<2:
+    if getattr(channel_watch_ui,'CHANNEL_FORM_API',0)<3:
         import importlib
         importlib.reload(channel_watch_ui)
     from channel_watch_ui import show as show_channels
@@ -111,7 +133,7 @@ if page=='channels':
 
 if page=='queue':
     import queue_ui
-    if getattr(queue_ui,'QUEUE_FORM_API',0)<2:
+    if getattr(queue_ui,'QUEUE_FORM_API',0)<4:
         import importlib
         importlib.reload(queue_ui)
     from queue_ui import show as show_queue
@@ -144,6 +166,19 @@ if page=='accounts':
 if page=='social_history':
     from social_ui import history_screen
     history_screen()
+    st.stop()
+
+if page=='publishing':
+    import publishing_workspace
+    if getattr(publishing_workspace,'WORKSPACE_API',0)<5:
+        import importlib
+        importlib.reload(publishing_workspace)
+    import publishing_workspace_ui
+    if getattr(publishing_workspace_ui,'PUBLISHING_FORM_API',0)<8:
+        import importlib
+        importlib.reload(publishing_workspace_ui)
+    from publishing_workspace_ui import show as show_publishing
+    show_publishing(ROOT,go)
     st.stop()
 
 if page=='source':
@@ -335,6 +370,7 @@ if page=='settings':
     a,b=st.columns([1,2])
     if a.button('← Change video'):go('source')
     if b.button('Find my clips →',type='primary',disabled=not ready):
+        st.session_state.pop('analysis_error',None)
         st.session_state.settings=settings;(folder/'ui-settings.json').write_text(json.dumps(settings));go('processing')
     if st.button('Add to video queue',disabled=not ready):
         from queue_ui import add_project
@@ -358,18 +394,33 @@ if page=='processing':
     st.write('Finding clear openings, complete moments and a worthwhile payoff.')
     st.caption('Selection uses local editing estimates, not a prediction of views or a live trend feed.')
     st.caption('Large-model tasks run one at a time to protect memory. If another video is processing, this job may wait its turn.')
+    key=hashlib.sha256(json.dumps([project,settings],sort_keys=True).encode()).hexdigest()[:20]
+    from analysis_recovery_ui import show as show_recovery
+    from clip_queue import QueueStore
+    queued=any(item['state'] in ('queued','running') and Path(item['project']['folder']).resolve()==folder.resolve()
+               and item['settings']==settings for item in QueueStore(ROOT).items())
+    previous=st.session_state.get('analysis_error',{})
+    if queued or previous.get('key')==key:
+        if previous.get('key')==key:st.error('Processing stopped: '+previous['message'])
+        show_recovery(ROOT,project,settings,go)
+        if st.button('Back to settings'):go('settings')
+        st.stop()
     try:
-        key=hashlib.sha256(json.dumps([project,settings],sort_keys=True).encode()).hexdigest()[:20]
         result=run_job(key,lambda update:analyze(project,settings,update),estimate_seconds(project,settings))
         st.session_state.result_path=result;go('complete')
     except Exception as error:
         log_exception('app')
+        st.session_state.analysis_error=dict(key=key,message=str(error))
         st.error(f'Processing stopped: {error}')
-        st.caption('Your video and completed transcript are saved. You can retry.')
+        show_recovery(ROOT,project,settings,go)
         if st.button('Back to settings'):go('settings')
     st.stop()
 
 path=Path(st.session_state.result_path);candidates=json.loads(path.read_text())
+partial_analysis=False
+if page in ('complete','results','editor'):
+    from analysis_recovery_ui import partial_notice
+    partial_analysis=partial_notice(path,go)
 if page in ('complete','results','editor') and settings.get('shorts_editor') and settings['mode']!='Sports':
     from shorts_context import SELECTION_TAG
     if SELECTION_TAG+'-' not in path.name:
@@ -377,9 +428,9 @@ if page in ('complete','results','editor') and settings.get('shorts_editor') and
         if st.button('Find fuller clips with updated AI',key='upgrade-selection-'+str(path)):
             go('processing')
 if page=='complete':
-    st.markdown('<div class="eyebrow">FIRST CUT, FINISHED</div>',unsafe_allow_html=True)
-    st.title('Your moments are ready.' if candidates else 'No clear matches this time.')
-    st.progress(1.,text='100% · Analysis complete')
+    st.markdown('<div class="eyebrow">'+('RECOVERED EDITS' if partial_analysis else 'FIRST CUT, FINISHED')+'</div>',unsafe_allow_html=True)
+    st.title('Your recovered moments.' if partial_analysis else 'Your moments are ready.' if candidates else 'No clear matches this time.')
+    if not partial_analysis:st.progress(1.,text='100% · Analysis complete')
     a,b,c=st.columns(3)
     from edit_timeline import edited_duration
     a.metric('Suggested clips',len(candidates));b.metric('Selected footage',clock(sum(edited_duration(x) for x in candidates)));c.metric('Style',settings['mode'])
@@ -428,6 +479,9 @@ if page=='results':
     show_used=st.radio('Show clips',['All','Unused','Used'],horizontal=True)
     clip_search=st.text_input('Search clips',placeholder='Find a title or spoken phrase…').strip().lower()
     if st.button('Combine saved clips into a video'):go('combine')
+    if st.button('Add this project to Publishing'):
+        from publishing_workspace import add_project
+        add_project(ROOT,folder);st.session_state.pop('publishing-projects',None);go('publishing')
     if st.button('← Overview'):go('complete')
     visible=0
     for i,c in enumerate(candidates):
@@ -632,6 +686,12 @@ if page=='editor':
             download_area=st.container()
         from combined_video import register_clip
         finished_clip=register_clip(folder,video,captions,style.get('title') or candidate['title'],project['title'])
+        from publishing_workspace import register_render,queue_text
+        posting_row=register_render(folder,path,usage_candidate,package,settings,video,captions,render_id)
+        try:queue_text(ROOT,[posting_row])
+        except Exception as error:
+            log_exception('Automatic posting preparation')
+            with preview:st.warning('Clip saved; AI posting text needs attention: '+str(error))
         finished_clip['duration']=timeline_duration(final_ranges)
         with edit_tab:
             if st.button('Add to combined video'):

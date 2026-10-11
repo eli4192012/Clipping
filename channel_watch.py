@@ -16,6 +16,7 @@ from youtube_channels import discover, eligible, CHANNEL_ID
 from youtube_import import lookup, UnfinishedVideo
 
 POLL_SECONDS = 300
+WATCH_API = 2
 
 
 class WatchStore:
@@ -91,7 +92,9 @@ class WatchStore:
 
     def videos(self, channel_id):
         with self.connection() as db:
-            return [self.decode(r) for r in db.execute('SELECT * FROM videos WHERE channel_id=? ORDER BY rowid DESC',(channel_id,))]
+            return [self.decode(r) for r in db.execute("""SELECT * FROM videos WHERE channel_id=?
+                ORDER BY CASE WHEN state='old' THEN 1 ELSE 0 END,
+                CASE WHEN json_valid(metadata) THEN json_extract(metadata,'$.published') END DESC,rowid DESC""",(channel_id,))]
 
     def record(self, channel_id, entry, state, metadata=None, error='', retry_at=0):
         with self.connection() as db:
@@ -170,7 +173,8 @@ def tick(store, now=None, discovery=discover, inspector=lookup, launch=ensure_ru
             store.update(channel['id'],failures=failures,error=redact(str(error)) or type(error).__name__,
                          status='Could not check channel; will retry',next_check=now+min(3600,POLL_SECONDS*2**min(failures-1,4)))
     queue = QueueStore(store.root)
-    queue.auto_start()
+    queue.retry_failed_uploads([c['id'] for c in store.channels() if c['enabled']],now)
+    queue.auto_start(now)
     launch(store.root)
 
 

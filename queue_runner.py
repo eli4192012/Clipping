@@ -10,6 +10,11 @@ from clip_queue import QueueStore, SourceSkipped
 
 
 def process_item(store, item):
+    if item['settings'].get('publishing_text'):
+        from publishing_workspace import prepare_queued_text
+        store.update(item['id'],label='Preparing AI titles and descriptions')
+        prepare_queued_text(store.root,item,lambda p,label:store.update(item['id'],progress=.99*p,label=label))
+        return
     from jobs import analyze, estimate_seconds
     from queue_exports import export_suggestions
     if item.get('remote'):
@@ -23,6 +28,21 @@ def process_item(store, item):
     stat = source.stat()
     if [stat.st_size, stat.st_mtime_ns] != item['source_state']:
         raise ValueError('The source video changed after it was queued. Add the updated project again.')
+    if item['settings'].get('publishing_prepare'):
+        from project_store import read
+        result=Path(item['settings']['publishing_run']).resolve()
+        if result.parent!=Path(item['project']['folder']).resolve() or not isinstance(read(result,None),list):
+            raise ValueError('The saved clip selection for publishing is missing. Open the project to prepare a new selection.')
+        if read(result.with_suffix('.diagnostics.json'),{}).get('partial_analysis'):
+            raise ValueError('Finish the interrupted analysis before preparing this project for publishing.')
+        store.update(item['id'],result=str(result),label='Preparing clips for publishing')
+        outputs=export_suggestions(item['project'],item['settings'],str(result),
+            lambda p,label:store.update(item['id'],progress=.55*p,label=label),
+            lambda exports:store.update(item['id'],exports=exports))
+        from publishing_workspace import prepare_project
+        prepare_project(item['project'],item['settings'],str(result),outputs,
+            lambda p,label:store.update(item['id'],progress=.55+.44*p,label=label))
+        return
     base = .08 if item.get('remote') else 0.
     last = base
 
@@ -50,9 +70,12 @@ def process_item(store, item):
     result = analyze(item['project'], item['settings'], lambda p, label: progress(base+scale*p, label))
     store.update(item['id'], result=result)
     if item['export_clips']:
-        export_suggestions(item['project'], item['settings'], result,
-                           lambda p, label: progress(.75+.24*p, label),
-                           lambda exports: store.update(item['id'], exports=exports))
+        outputs=export_suggestions(item['project'], item['settings'], result,
+                                  lambda p, label: progress(.75+.15*p, label),
+                                  lambda exports: store.update(item['id'], exports=exports))
+        from publishing_workspace import prepare_project
+        prepare_project(item['project'],item['settings'],result,outputs,
+                        lambda p,label:progress(.90+.09*p,label))
 
 
 def run(root, processor=process_item, poll=.5, closed_lid=False):
@@ -114,7 +137,8 @@ def process_queue(root, store, processor, poll, power=None):
                 store.skip(item['id'],str(error))
             except Exception as error:
                 log_exception('Queued video failed')
-                store.finish(item['id'], redact(str(error)) or type(error).__name__)
+                message = redact(str(error)) or type(error).__name__
+                if not store.retry_upload(item['id'],message):store.finish(item['id'],message)
             else:
                 store.finish(item['id'])
             finally:

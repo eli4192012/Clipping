@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 DB = ROOT / 'data' / 'social.sqlite3'
+SCHEDULE_API = 1
 
 @contextmanager
 def connection():
@@ -74,6 +75,12 @@ def validate(draft):
             raise ValueError('Instagram captions must fit 2,200 characters and 30 hashtags.')
     else:
         raise ValueError('Choose YouTube or Instagram.')
+    if draft.get('publish_at'):
+        from social_schedule import parse_time,future_time
+        parse_time(draft['publish_at'])
+        if draft['status']=='Draft':future_time(draft['publish_at'])
+        if draft['platform']=='youtube' and draft['privacy']!='private':
+            raise ValueError('Scheduled YouTube uploads must stay private until their public release.')
 
 
 def save_draft(draft):

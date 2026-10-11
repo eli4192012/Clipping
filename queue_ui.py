@@ -5,7 +5,7 @@ import streamlit as st
 from clip_queue import QueueStore, ensure_runner, runner_alive
 from project_store import library, read
 from ui_jobs import clock
-QUEUE_FORM_API = 2
+QUEUE_FORM_API = 4
 
 
 def add_project(root, project, settings, export_clips=True):
@@ -19,7 +19,7 @@ def show(root, go):
     store = QueueStore(root)
     st.markdown('<div class="eyebrow">WORK WHILE YOU STEP AWAY</div>', unsafe_allow_html=True)
     st.title('Video queue')
-    st.write('Line up videos. We’ll find their clips and export them, one video at a time.')
+    st.write('Line up videos. We’ll find their clips, export them and prepare posting text, one video at a time.')
     st.caption('You can close the browser tab. For lid-closed clipping, turn on the Amphetamine option below, keep your charger connected and leave the Mac on a hard surface with room for airflow. Normal queues prevent idle sleep; closing the lid can still interrupt them. Reopening the app resumes saved work with normal lid-open processing.')
     entries = library(root/'data')
     configured = {}
@@ -65,8 +65,8 @@ def live_queue(root, go):
     if enabled and not alive:
         ensure_runner(root)
     a, b, c = st.columns(3)
-    a.metric('Waiting videos', len(waiting))
-    b.metric('Completed videos', sum(item['state']=='done' for item in items))
+    a.metric('Waiting jobs', len(waiting))
+    b.metric('Completed jobs', sum(item['state']=='done' for item in items))
     c.metric('Needs attention', sum(item['state']=='failed' for item in items))
     power = status(root)
     if power.get('phase') == 'active':
@@ -108,14 +108,22 @@ def live_queue(root, go):
             elapsed = time.time()-current['started'] if current['started'] else 0
             st.caption('Elapsed '+clock(elapsed))
             if current['estimate']:
-                st.caption('Analysis estimate: about '+clock(current['estimate'])+(' · export time is additional.' if current['export_clips'] else '. Actual time varies.'))
+                st.caption('Analysis estimate: about '+clock(current['estimate'])+(' · export and posting-text time is additional.' if current['export_clips'] else '. Actual time varies.'))
     if waiting:st.subheader('Up next')
     for index, item in enumerate(waiting):
         with st.container(border=True):
             st.write(f"{index+1}. {item['project']['title']}")
             settings = item['settings']
-            mode = 'Automatic' if settings.get('watch_auto_type') else settings['mode']
-            st.caption(f"{mode} · {settings.get('quality','Balanced')} · {settings['minimum']}–{settings['maximum']} seconds · "+('Find and export clips' if item['export_clips'] else 'Find clips'))
+            if settings.get('publishing_text'):
+                st.caption(f"AI titles, hashtags & descriptions · {len(settings['publishing_text'])} saved clips · reuses finished videos")
+            else:
+                mode = 'Automatic' if settings.get('watch_auto_type') else settings['mode']
+                st.caption(f"{mode} · {settings.get('quality','Balanced')} · {settings['minimum']}–{settings['maximum']} seconds · "+('Find, export and prepare posting text' if item['export_clips'] else 'Find clips'))
+            if item['retry_at']:
+                wait=max(0,int(item['retry_at']-time.time()))
+                timing=f'in about {wait} seconds' if wait else 'waiting for its turn'
+                st.info(f"Automatic retry {item['auto_retries']} of 3 · "+timing+'. Saved work will be reused.')
+                if item['error']:st.caption('Previous attempt · '+item['error'])
             up, down, remove = st.columns(3)
             if up.button('Move up', key='queue-up-'+item['id'], disabled=index==0):
                 store.move(item['id'], -1); st.rerun()
@@ -133,16 +141,19 @@ def live_queue(root, go):
                     st.info('Skipped · '+item['error'])
                 elif item['state']=='failed':
                     st.error('Needs attention · '+item['error'])
-                    if st.button('Retry this video', key='queue-retry-'+item['id']):
+                    if st.button('Retry posting text' if item['settings'].get('publishing_text') else 'Retry this video', key='queue-retry-'+item['id']):
                         try:
                             store.retry(item['id']); ensure_runner(root); st.rerun()
                         except ValueError as error:
                             st.error(str(error))
                 else:
-                    count = len(read(item['result'], [])) if item['result'] else 0
-                    exported = sum(Path(clip['video']).is_file() for clip in item['exports'])
-                    st.success(f'Complete · {count} '+('clip' if count==1 else 'clips')+' selected'+
-                               (f' · {exported} '+('clip' if exported==1 else 'clips')+' exported' if item['export_clips'] else ''))
+                    if item['settings'].get('publishing_text'):
+                        st.success(f"Complete · Posting text checked for {len(item['settings']['publishing_text'])} saved clips")
+                    else:
+                        count = len(read(item['result'], [])) if item['result'] else 0
+                        exported = sum(Path(clip['video']).is_file() for clip in item['exports'])
+                        st.success(f'Complete · {count} '+('clip' if count==1 else 'clips')+' selected'+
+                                   (f' · {exported} '+('clip' if exported==1 else 'clips')+' exported' if item['export_clips'] else ''))
                 if item['result'] and Path(item['result']).is_file():
                     if st.button('Open clips', key='queue-open-'+item['id']):
                         st.session_state.project=item['project']; st.session_state.settings=item['settings']

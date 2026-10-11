@@ -82,6 +82,22 @@ class SocialTests(unittest.TestCase):
             self.assertEqual(req.call_count,1)
         self.assertEqual(store.get('draft')['status'],'Needs check')
         self.assertFalse(is_used(self.root,self.draft['run'],self.draft['candidate']))
+    def test_expired_login_keeps_draft_editable_without_an_upload_request(self):
+        error=auth.SocialError(auth.OAUTH_ERRORS['invalid_grant'],reason='invalid_grant',needs_reconnect=True)
+        with patch.object(auth,'access',side_effect=error),patch.object(auth,'request') as request:
+            with self.assertRaises(auth.SocialError):pub.publish('draft')
+            request.assert_not_called()
+        saved=store.get('draft');self.assertEqual(saved['status'],'Draft')
+        self.assertEqual(saved['error'],str(error));self.assertEqual(saved['title'],self.draft['title'])
+        self.assertEqual(self.video.read_bytes(),b'fake video bytes')
+        self.assertFalse(is_used(self.root,self.draft['run'],self.draft['candidate']))
+    def test_known_upload_error_retains_reason_and_never_retries_uncertain_attempt(self):
+        error=auth.SocialError(auth.YOUTUBE_ERRORS['uploadLimitExceeded'],reason='uploadLimitExceeded',status_code=400)
+        with patch.object(auth,'request',side_effect=error) as request:
+            with self.assertRaisesRegex(auth.SocialError,'upload limit'):pub.publish('draft')
+            self.assertEqual(request.call_count,1)
+        self.assertEqual(store.get('draft')['status'],'Needs check')
+        self.assertIn('upload limit',store.get('draft')['error'])
     def test_instagram_streams_then_publishes(self):
         self.instagram()
         calls=[Response(data={'id':'container','uri':'https://rupload.facebook.com/upload'}),Response(data={'success':True}),Response(data={'status_code':'FINISHED'}),Response(data={'id':'media'}),Response(data={'permalink':'https://www.instagram.com/reel/abc/'})]

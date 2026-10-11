@@ -7,7 +7,7 @@ A local video clipping studio for this Apple Silicon Mac. No paid AI APIs or acc
 This app requires an Apple Silicon Mac. The current development environment uses Python 3.13.14. Install Python 3.13 and put Node.js on your PATH if you want YouTube imports. Then run:
 
 ```sh
-git clone --branch codex/v5.17-visual-packaging https://github.com/eli4192012/Clipping.git
+git clone https://github.com/eli4192012/Clipping.git
 cd Clipping
 python3.13 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
@@ -16,7 +16,7 @@ python3.13 -m venv .venv
 ./Start\ Clipping.command
 ```
 
-The repository is public. The setup command selects the development branch in [draft PR #1](https://github.com/eli4192012/Clipping/pull/1), which contains the version described here. `requirements.lock.txt` pins the complete main environment, including MLX Whisper, scene detection and Keychain support; `requirements.txt` lists the direct dependency constraints. Model setup downloads files from Hugging Face and the pinned OpenCV YuNet face detector and needs internet access and several GB of free space. Transcription, model inference and editing then run locally. Alignment and speaker detection have separate optional setup commands described below.
+The repository is public. The setup command uses `main`, which contains the current release described here. `requirements.lock.txt` pins the complete main environment, including MLX Whisper, scene detection and Keychain support; `requirements.txt` lists the direct dependency constraints. Model setup downloads files from Hugging Face and the pinned OpenCV YuNet face detector and needs internet access and several GB of free space. Transcription, model inference and editing then run locally. Alignment and speaker detection have separate optional setup commands described below.
 
 The repository contains the app, tests and documentation. Your videos, saved project transcripts, exports, downloaded models, virtual environments, worker artifacts and credentials stay on this Mac and are excluded from Git. Small regression fixtures in `tests/fixtures/` are included for the tests. Validation reports refer to local media and work files that are not included in a clone. GitHub is a code backup; back up your local projects and exports separately.
 
@@ -42,7 +42,25 @@ Keep the Terminal window open. Press Control-C there to stop the app.
 4. On the completion summary, click **Open my clips**.
 5. Choose **Review clip** to render that one standalone clip. Adjust its boundaries if needed, then save the video or subtitles.
 
-The top-right release button is **v5.35**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 5 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+The top-right release button is **v6.2**; click it for changes and validation results. Each subsequent shipped user-requested update increments the minor number; the major number stays 6 unless requested otherwise. Release numbering lives in `version.json`, separate from analysis-cache versions.
+
+## Publishing workspace
+
+Open **Publishing** in the sidebar and choose the projects to include. Your project selection and destination settings are saved locally. You can also click **Add this project to Publishing** in a project's clip collection.
+
+Finished queue exports now automatically get local AI titles, inline hashtags and descriptions before their job completes. Opening an individual clip also queues its missing posting text. **Publishing** automatically prepares missing copy for the existing exports in your selected projects, without reanalysis, retranscription or re-rendering. Checked AI-copy caches and your saved manual text are reused. Work continues outside the browser, and explicit queue pauses are respected.
+
+**Prepare missing clips & AI text** can still create exports from completed saved analyses. **Retry missing AI text** retries unsuccessful text without rendering videos. The app attempts each export/AI identity automatically once; a rejected draft stays visible in **Needs preparation** with its reason, while successful copy and all videos remain saved. Reviewed drafts and upload/schedule receipts are preserved. Clip lists show 12 clips per page for large collections. Preparation progress is in **Video queue**. Projects with only recovered partial results must finish analysis before exporting the remaining selections; their existing finished exports can still get posting text.
+
+In **Ready to post**, preview the video and check or edit the title and description. Select a connected YouTube or Instagram account at the top. YouTube requires a visibility choice and a made-for-kids choice; Google may still restrict an unaudited project's uploads to private. Instagram posts the title, inline hashtags and description together as the Reel caption. **Publish to [account]** saves the displayed copy and uploads that exact export in one click. Titles reserve #fyp; a full title must leave room for it.
+
+**Posting history** keeps platform receipts, errors, confirmed posts and status checks. An interrupted upload is checked and continued using its existing session rather than silently creating another post. The workspace blocks another attempt for the same clip/account, including a concurrent attempt from another tab. The original per-clip composer and history screen remain available. Direct posting supports YouTube and Instagram; TikTok's existing editable posting package is still available in the clip editor.
+
+To post later, choose the **Scheduling timezone**, tick **Schedule this post** on a clip, choose its **Post date** and **Post time**, then click **Schedule to [account]**. The displayed video, title, hashtags, description and audience are saved together. Dates must be in the future; clocks skipped or repeated by a daylight-saving change require another time. **Scheduled posts** and both history screens show the saved time and status.
+
+For **YouTube**, scheduling uploads the clip privately now with its future public release time. Once YouTube accepts the upload and schedule, YouTube handles the release while your Mac is off. Uploading must finish first; existing Google audit/account restrictions still apply. Use **Check post status** to confirm YouTube's schedule/publication and **Manage in YouTube Studio** to change or cancel an uploaded schedule. A processed private scheduled video is not marked Published or Used until its public release is confirmed.
+
+For **Instagram**, the saved schedule runs in a separate local process. Keep this Mac awake and online at the selected time; closing the browser is fine. Reopening the app restarts pending local schedules after shutdown. If the post is more than one hour late, it waits for you to cancel and choose a new time. **Cancel schedule & return to editing** works until uploading starts. Completed uploads retain their original receipt; uncertain publication is never automatically repeated. This adds per-clip scheduling, not automatic channel posting or the future two-posts-per-hour limit.
 
 ## Personal posting style
 
@@ -65,6 +83,10 @@ Choose **YouTube channels** in the sidebar. Paste a public channel link or `@han
 Automatic mode first saves/reuses the full transcript, then gives it to the existing local speech/title/face detector to select Interview, Podcast or Sports. The editing pass reuses that transcript. Interviews retain the one-question limit; podcast/story rules remain distinct. Sports use a 10–35-second preference, 35% coverage ceiling, and football vision only when its selected local model is already installed. Detection results, confidence and the resolved per-video settings are retained with the queue item. Detection and sports boundaries can still be wrong and require review. Channel preferences remain unchanged; retries retain the original speech duration preferences as well as the last detected mode.
 
 A detached local watcher checks about every five minutes with the existing [yt-dlp](https://github.com/yt-dlp/yt-dlp) dependency. No Google sign-in, OAuth verification or paid API key is needed for public source discovery. It reads the channel's **Videos** tab, excluding Shorts and live-stream tabs, and skips live/upcoming/still-processing uploads. Each check examines at most the latest **50** regular uploads. On first connection and later checks, eligible videos are those published within **48 hours**, plus the newest finished regular upload even if older. Age is checked with individual video metadata, not approximate channel-page dates. An unavailable/undated upload waits for a later check; channel errors back off up to one hour.
+
+Connected channel cards show **Ready clips**, current editing progress and **Open clips** for saved selections. Eligible uploads are downloaded, edited and exported with captions automatically. Temporary HTTP/network failures and resumable analysis time limits retry up to three times, after 1, 5 and 25 minutes, while an enabled channel watcher schedules recovery. Queue pauses are respected and completed video IDs remain deduplicated. Other videos can finish while a retry waits. A 403 download gets one fresh attempt using available streaming formats, keeping the same 720p/4 GB limits. Some YouTube errors still require attention after the retry budget. Long topic reviews can continue beyond one hour while progress changes; one hour without progress or 24 hours overall stops the worker and retains its saved reviews. The topic worker enforces this policy even when an older caller omits its progress-timeout option.
+
+After interrupted analysis, **Open recovered clips** exposes approved cached speech edits for the same transcript, editor and settings without loading an AI model. It saves a separate partial selection; full results stay intact. Recovered collections clearly say that full analysis and any remaining visual/sound review are unfinished. **Resume saved work & export clips** queues the same settings and reuses saved transcription and checked edits. The unfinished edit and previously unsuccessful checks may run again. Queue pauses are respected. Refreshing a failed processing page keeps its recovery controls instead of starting another job; an already queued recovery is shown without launching a duplicate.
 
 Eligible videos enter the same FIFO **Video queue**, oldest eligible first, with frozen clip settings and automatic exports. The queue imports a source when its turn arrives, then reuses the normal local transcription, AI selection, captions and rendering. Downloads also hold the single heavy-job lock. It rechecks publication age before importing: an upload that aged beyond two days is skipped unless it is still the newest finished regular upload. Saved source files, transcripts and successful renders are reused. A manual project and its preferences are retained when its source is reused.
 

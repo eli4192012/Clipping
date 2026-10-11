@@ -1,6 +1,7 @@
 """Durable local FIFO clipping queue; project/settings snapshots are immutable."""
 import hashlib
 import json
+import re
 import sqlite3
 import time
 import uuid
@@ -8,7 +9,16 @@ from contextlib import contextmanager
 from pathlib import Path
 
 ACTIVE = ('queued', 'running')
-QUEUE_API = 2
+QUEUE_API = 4
+AUTO_RETRY_LIMIT = 3
+
+
+def retryable_upload_error(error):
+    message = str(error).lower()
+    return ('local analysis reached its time limit' in message or
+            bool(re.search(r'http (?:error |status )?(?:403|408|429|500|502|503|504)\b', message)) or
+            any(text in message for text in ('timed out', 'connection reset', 'connection aborted',
+                                             'temporary failure in name resolution', 'network is unreachable')))
 
 
 class SourceSkipped(ValueError):
@@ -39,6 +49,8 @@ class QueueStore:
             columns = {r[1] for r in db.execute('PRAGMA table_info(items)')}
             if 'remote' not in columns:db.execute("ALTER TABLE items ADD COLUMN remote TEXT NOT NULL DEFAULT ''")
             if 'origin_key' not in columns:db.execute('ALTER TABLE items ADD COLUMN origin_key TEXT')
+            if 'retry_at' not in columns:db.execute('ALTER TABLE items ADD COLUMN retry_at REAL NOT NULL DEFAULT 0')
+            if 'auto_retries' not in columns:db.execute('ALTER TABLE items ADD COLUMN auto_retries INTEGER NOT NULL DEFAULT 0')
             db.execute('CREATE UNIQUE INDEX IF NOT EXISTS queue_origin ON items(origin_key)')
 
     @contextmanager
@@ -82,10 +94,32 @@ class QueueStore:
         with self.connection() as db:
             return bool(db.execute('SELECT paused FROM control WHERE id=1').fetchone()[0])
 
-    def auto_start(self):
+    def auto_start(self, now=None):
         """Watching can restart an idle queue, but never override an explicit pause."""
         with self.connection() as db:
-            db.execute("UPDATE control SET enabled=1 WHERE paused=0 AND EXISTS (SELECT 1 FROM items WHERE state='queued')")
+            db.execute("UPDATE control SET enabled=1 WHERE paused=0 AND EXISTS (SELECT 1 FROM items WHERE state='queued' AND retry_at<=?)",
+                       (time.time() if now is None else now,))
+
+    def retry_upload(self, identity, error, now=None):
+        """Bounded automatic recovery of watched uploads; preserve caches and pause intent."""
+        if not retryable_upload_error(error):return False
+        now = time.time() if now is None else now
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute("SELECT * FROM items WHERE id=? AND state IN ('running','failed')",(identity,)).fetchone()
+            if row is None or not row['remote'] or row['auto_retries']>=AUTO_RETRY_LIMIT:return False
+            delay = 60*5**row['auto_retries']
+            position = db.execute('SELECT COALESCE(MAX(position),0)+1 FROM items').fetchone()[0]
+            db.execute("""UPDATE items SET state='queued',position=?,retry_at=?,auto_retries=auto_retries+1,
+                started=NULL,finished=NULL,label='Automatic retry scheduled; saved work retained',error=? WHERE id=?""",
+                (position,now+delay,str(error)[:2000],identity))
+            return True
+
+    def retry_failed_uploads(self, channel_ids, now=None):
+        channels = set(channel_ids)
+        for item in self.items():
+            if item['state']=='failed' and item['remote'] and item['remote'].get('channel_id') in channels:
+                self.retry_upload(item['id'],item['error'],now)
 
     def idle(self):
         with self.connection() as db:
@@ -132,25 +166,31 @@ class QueueStore:
             db.execute("UPDATE items SET settings=? WHERE id=? AND state='running'",(json.dumps(settings),identity))
         return self.get(identity)
 
-    def add(self, project, settings, export_clips=True):
+    def add(self, project, settings, export_clips=True, once=False):
         from analysis_settings import AnalysisSettings
-        AnalysisSettings.read(settings)
+        text_only=bool(settings.get('publishing_text'))
+        if not text_only:AnalysisSettings.read(settings)
         project = dict(project)
         folder = Path(project['folder']).resolve()
         if folder.parent != (self.root/'data').resolve() or not folder.is_dir():
             raise ValueError('Choose an imported project in this app.')
-        source = Path(project['source']).resolve()
-        stat = source.stat()
-        if not source.is_file():
-            raise ValueError('The source video is missing.')
-        from engine import duration
-        project.update(folder=str(folder), source=str(source), duration=project.get('duration') or duration(source))
-        source_state = [stat.st_size, stat.st_mtime_ns]
-        encoded = json.dumps([str(folder), str(source), source_state, settings], sort_keys=True)
+        if text_only:
+            # Saved exports have their own frozen media states. No source is needed.
+            project.update(folder=str(folder))
+            source_state=[]
+        else:
+            source = Path(project['source']).resolve()
+            stat = source.stat()
+            if not source.is_file():raise ValueError('The source video is missing.')
+            from engine import duration
+            project.update(folder=str(folder), source=str(source), duration=project.get('duration') or duration(source))
+            source_state = [stat.st_size, stat.st_mtime_ns]
+        encoded = json.dumps([str(folder), project.get('source',''), source_state, settings], sort_keys=True)
         fingerprint = hashlib.sha256(encoded.encode()).hexdigest()
         with self.connection() as db:
             db.execute('BEGIN IMMEDIATE')
-            prior = db.execute("SELECT * FROM items WHERE fingerprint=? AND state IN ('queued','running')", (fingerprint,)).fetchone()
+            condition='' if once else " AND state IN ('queued','running')"
+            prior = db.execute('SELECT * FROM items WHERE fingerprint=?'+condition, (fingerprint,)).fetchone()
             if prior:
                 return self.decode(prior), False
             identity = uuid.uuid4().hex
@@ -166,7 +206,7 @@ class QueueStore:
             db.execute('BEGIN IMMEDIATE')
             if not db.execute('SELECT enabled FROM control WHERE id=1').fetchone()[0]:
                 return None
-            row = db.execute("SELECT * FROM items WHERE state='queued' ORDER BY position,created LIMIT 1").fetchone()
+            row = db.execute("SELECT * FROM items WHERE state='queued' AND retry_at<=? ORDER BY position,created LIMIT 1",(time.time(),)).fetchone()
             if row is None:
                 db.execute('UPDATE control SET enabled=0 WHERE id=1')
                 return None
@@ -206,7 +246,7 @@ class QueueStore:
             if duplicate:
                 raise ValueError('This video with these settings is already waiting or processing.')
             position = db.execute('SELECT COALESCE(MAX(position),0)+1 FROM items').fetchone()[0]
-            db.execute("UPDATE items SET state='queued',position=?,started=NULL,finished=NULL,progress=0,label='Waiting to retry',error='' WHERE id=?", (position, identity))
+            db.execute("UPDATE items SET state='queued',position=?,started=NULL,finished=NULL,progress=0,retry_at=0,auto_retries=0,label='Waiting to retry',error='' WHERE id=?", (position, identity))
             return True
 
     def remove(self, identity):

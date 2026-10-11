@@ -7,6 +7,7 @@ from pathlib import Path
 from project_store import read,write
 
 VERSION='social-copy-6'
+COPY_CACHE_API=1
 TAG=re.compile(r'(?<!\w)#[\w]+',re.UNICODE)
 UNCERTAINTY=re.compile(r'\b(?:may|might|could|maybe|perhaps|possibly|possible|potentially|unclear|uncertain|unconfirmed)\b',re.I)
 BENEFIT_TERMS = (r'\bconfiden(?:ce|t)\b',r'\bresilien\w*\b',r'\bchemistry\b',r'\bsharp\w*\b',r'\bsurviv\w*\b')
@@ -276,21 +277,33 @@ def refresh_fields(post,default,ai_key):
     return fields
 
 
-def get_copy(folder,package,settings,progress=lambda p,label:None,force=False):
-    from posting_style import for_clip,provenance
-    style=for_clip(folder,package)
+def cached_copy(folder,package,settings,style=None):
+    """Read checked AI text without launching inference, including editor caches."""
+    from posting_style import for_clip
+    style=for_clip(folder,package) if style is None else style
     key,model=identity(package,settings,style)
     path=Path(folder)/'ai-social-copy-v520'/(key+'.json')
     cached=read(path,None)
-    if not force and isinstance(cached,dict) and cached.get('version')==VERSION and cached.get('source_check',{}).get('faithful') is True:
+    if isinstance(cached,dict) and cached.get('version')==VERSION and cached.get('fingerprint')==package['fingerprint'] and cached.get('source_check',{}).get('faithful') is True:
         try:
             copy=normalize(cached,package['final_transcript'],style)
             options=title_options(cached,package['final_transcript'],minimum=1,style=style)
             if closing_qualification(package['final_transcript']) and cached['source_check'].get('ending_preserved') is not True:
                 raise ValueError('The saved description has not passed the closing qualification check.')
-            progress(1,'Reused saved AI title and description')
             return dict(cached,**copy,title_options=options)
         except ValueError:pass
+    return None
+
+
+def get_copy(folder,package,settings,progress=lambda p,label:None,force=False):
+    from posting_style import for_clip,provenance
+    style=for_clip(folder,package)
+    key,model=identity(package,settings,style)
+    path=Path(folder)/'ai-social-copy-v520'/(key+'.json')
+    cached=None if force else cached_copy(folder,package,settings,style)
+    if cached is not None:
+        progress(1,'Reused saved AI title and description')
+        return cached
     from upgrades import worker
     payload=dict(text=package['final_transcript'],editor_model=model)
     if style:payload['posting_style']=style

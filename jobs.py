@@ -7,7 +7,7 @@ from analysis_settings import AnalysisSettings
 from modes import VERSION,speech_candidates,sports_candidates,scan_visuals,refine_sports_boundaries,select_highlights
 from vision_sports import visual_candidates
 from upgrades import signature,transcript_file,worker,scene_times,apply_scene_context,VISION4
-CURATION_API=2
+CURATION_API=3
 
 
 def analysis_path(project, settings):
@@ -137,7 +137,7 @@ def analyze(project,settings,progress):
             candidates=refine_sports_boundaries(sports_candidates(transcript['sentences'],samples,total,minimum,maximum),samples,transcript['sentences'],total)
         elif settings['semantic']:
             progress(.62,'Grouping topics and checking complete conversations locally')
-            candidates=worker('topics',dict(sentences=transcript['sentences'],words=transcript['words'] if settings.get('shorts_editor') else [],shorts_editor=settings.get('shorts_editor',False),minimum=minimum,maximum=maximum,mode=mode,quality=settings.get('quality','Balanced'),editor_model=settings.get('editor_model'),cache_dir=str(folder/'topic-reviews-v37'),categories=settings.get('categories',[])),timeout=3600,progress=lambda p,label:progress(.62+.31*p,label))
+            candidates=worker('topics',dict(sentences=transcript['sentences'],words=transcript['words'] if settings.get('shorts_editor') else [],shorts_editor=settings.get('shorts_editor',False),minimum=minimum,maximum=maximum,mode=mode,quality=settings.get('quality','Balanced'),editor_model=settings.get('editor_model'),cache_dir=str(folder/'topic-reviews-v37'),categories=settings.get('categories',[])),timeout=3600,progress=lambda p,label:progress(.62+.31*p,label),progress_timeout=True)
         else:
             candidates=speech_candidates(transcript['sentences'],minimum,maximum,mode)
         if settings['semantic'] and mode!='Sports' and candidates and not all(c.get('topic_group') for c in candidates):

@@ -73,6 +73,8 @@ def export_suggestions(project, settings, result, progress=lambda p, label: None
                     presentation=style, ranges=ranges, progress=lambda p, text: progress((index+p)/max(1, len(candidates)), label+' · '+text))
                 write(manifest, [str(video), str(captions)])
             item = register_clip(folder, video, captions, candidate.get('title') or package['hook'], project['title'])
+            from publishing_workspace import register_render
+            register_render(folder,result,original,package,settings,video,captions,identity)
             outputs.append(dict(item, duration=timeline_duration(final_ranges)))
             checkpoint(outputs)
         except Exception as error:

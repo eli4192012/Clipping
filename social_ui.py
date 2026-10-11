@@ -7,15 +7,19 @@ import streamlit as st
 import social_store as store
 import social_auth as auth
 import social_publish as publisher
+SCHEDULE_UI_API = 1
+ACCOUNT_RECOVERY_API = 2
 
 
 def accounts_screen():
     st.title('Accounts')
     st.write('Connect a destination once. Review and publish each clip yourself.')
     st.caption('Clipping stays local. Signing in and publishing use the selected platform. Credentials are saved in macOS Keychain.')
-    for account in store.accounts():
+    accounts=store.accounts()
+    for account in accounts:
         with st.container(border=True):
-            st.subheader(account['name']);st.caption(account['platform'].title()+' · Connected')
+            st.subheader(account['name']);st.caption(account['platform'].title()+(' · Reconnect needed' if account.get('connection_error') else ' · Connected'))
+            if account.get('connection_error'):st.warning(account['connection_error'])
             if st.button('Disconnect',key='disconnect-'+account['id']):
                 try:auth.disconnect(account);st.rerun()
                 except Exception:
@@ -25,7 +29,7 @@ def accounts_screen():
     yt,ig=st.tabs(['YouTube','Instagram'])
     with yt:
         st.subheader('Connect YouTube')
-        with st.expander('First-time Google setup',expanded=True):
+        with st.expander('First-time Google setup',expanded=not any(a['platform']=='youtube' for a in accounts)):
             st.markdown('1. Create a Google Cloud project and enable **YouTube Data API v3**.\n2. Configure OAuth consent and add your Google account as a test user.\n3. Create an **OAuth client → Desktop app** and download its JSON.\n4. Upload it below, then connect your channel.')
             st.link_button('Open Google Cloud credentials','https://console.cloud.google.com/apis/credentials')
             st.info('New unaudited API projects may only upload private videos, even when you choose another visibility. Google test-mode logins may also need reconnecting.')
@@ -36,6 +40,7 @@ def accounts_screen():
                 except Exception:
                     log_exception('social_ui')
                     st.error('Could not save setup to macOS Keychain.')
+        if any(a['platform']=='youtube' for a in accounts):st.caption('To reconnect, use Connect YouTube with the same Google account and channel. Your saved app setup and posts stay saved.')
         if st.button('Connect YouTube'):
             try:st.session_state['social_google']=auth.begin_google()
             except Exception:
@@ -100,6 +105,8 @@ def draft_panel(draft):
     if draft.get('project_deleted'):
         st.info('This project was deleted. Posting history is kept, but publishing is disabled for this draft.')
         return
+    from social_schedule_ui import schedule_panel
+    if schedule_panel(draft,'history'):return
     if draft['status']=='Failed' and '-attempt-' not in draft['id']:
         if st.button('Start a new draft after this failure',key='retry-'+draft['id']):
             try:publisher.retry_failed(draft['id']);st.rerun()

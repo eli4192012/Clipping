@@ -144,7 +144,12 @@ class QueueTests(unittest.TestCase):
         def export(project, settings, result, progress, checkpoint):
             events.append(self.store.get(item['id'])['state'])
             progress(.5, 'Exporting clip 1 of 2');checkpoint([{'video':'clip1.mp4'}]);progress(1, 'Exported')
-        with patch('jobs.analyze', side_effect=analyze),patch('jobs.estimate_seconds',return_value=400),patch('queue_exports.export_suggestions',side_effect=export):
+            return [{'video':'clip1.mp4'}]
+        def prepare(project,settings,result,outputs,progress):
+            self.assertEqual(outputs,[{'video':'clip1.mp4'}])
+            self.assertEqual(self.store.get(item['id'])['progress'],.9)
+            progress(1,'Saved AI title and description')
+        with patch('jobs.analyze', side_effect=analyze),patch('jobs.estimate_seconds',return_value=400),patch('queue_exports.export_suggestions',side_effect=export),patch('publishing_workspace.prepare_project',side_effect=prepare):
             process_item(self.store,item)
         row=self.store.get(item['id'])
         self.assertEqual(events,['running'])

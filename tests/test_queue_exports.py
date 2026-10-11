@@ -92,13 +92,15 @@ class QueueExportTests(unittest.TestCase):
         store=QueueStore(self.root)
         a,_=store.add(self.project,SETTINGS);b,_=store.add(second,SETTINGS);store.set_enabled(True)
         before=(self.source.read_bytes(),self.transcript.read_bytes(),self.result.read_bytes())
-        with patch('engine.ROOT',self.root),patch('jobs.get_transcript',side_effect=AssertionError('Retranscribed saved work')),patch('jobs.worker',side_effect=AssertionError('Unexpected model work')):
+        with patch('engine.ROOT',self.root),patch('jobs.get_transcript',side_effect=AssertionError('Retranscribed saved work')),patch('jobs.worker',side_effect=AssertionError('Unexpected model work')),patch('social_copy.get_copy',return_value=dict(title='Keep a useful idea #fyp',description='A short explanation of this useful idea.')):
             run(self.root)
         first,last=store.get(a['id']),store.get(b['id'])
         self.assertEqual((first['state'],last['state']),('done','done'))
         self.assertLessEqual(first['finished'],last['started'])
         self.assertEqual((len(first['exports']),len(last['exports'])),(1,1))
         self.assertTrue(all(Path(row['exports'][0]['video']).is_file() for row in (first,last)))
+        from publishing_workspace import catalog,posting_text
+        self.assertTrue(all(all(posting_text(row).values()) for row in catalog(self.root,[self.folder,second_folder])[0]))
         self.assertEqual(before,(self.source.read_bytes(),self.transcript.read_bytes(),self.result.read_bytes()))
         self.assertFalse(store.enabled())
 
@@ -125,6 +127,7 @@ class QueueExportTests(unittest.TestCase):
             return self.source,self.folder
         with (patch('youtube_import.lookup',return_value=metadata),patch('youtube_import.download',side_effect=imported),
               patch('engine.ROOT',self.root),patch('jobs.get_transcript',side_effect=AssertionError('Retranscribed saved work')),
+              patch('social_copy.get_copy',return_value=dict(title='Keep a useful idea #fyp',description='A short explanation of this useful idea.')),
               patch('jobs.worker',side_effect=AssertionError('Unexpected model work'))):
             run(self.root)
         saved=store.get(item['id']);self.assertEqual(saved['state'],'done',saved['error'])

@@ -70,5 +70,14 @@ class QueueUITests(unittest.TestCase):
             self.launch.assert_any_call(self.root,closed_lid=True)
             self.assertTrue(self.store.enabled())
 
+    def test_text_only_job_shows_copy_progress_without_analysis_settings_or_source(self):
+        project=dict(self.projects[0],source='')
+        item,_=self.store.add(project,dict(publishing_text=[dict(id='export',media_state=[1,2],key='copy')]),export_clips=False)
+        app=self.app.run();self.assertFalse(app.exception)
+        self.assertTrue(any('AI titles, hashtags & descriptions' in c.value for c in app.caption))
+        self.store.set_enabled(True);self.store.claim();self.store.finish(item['id']);app.run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('Posting text checked for 1 saved clips' in s.value for s in app.success))
+
 
 if __name__=='__main__':unittest.main()

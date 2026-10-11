@@ -192,6 +192,36 @@ class WatchTests(unittest.TestCase):
             self.assertTrue(popen.call_args.kwargs['start_new_session'])
             self.assertIn('--root',popen.call_args.args[0])
 
+    def test_watcher_recovers_previous_transient_failure_when_due_without_duplicate(self):
+        now=time.time();upload=dict(video(1),published=now-10);self.scan([upload],now)
+        item=self.queue.claim();self.queue.finish(item['id'],'HTTP Error 403: Forbidden')
+        self.scan([upload],now+1)
+        retry=self.queue.get(item['id'])
+        self.assertEqual(retry['state'],'queued');self.assertEqual(retry['auto_retries'],1)
+        self.assertEqual(retry['retry_at'],now+61);self.assertEqual(len(self.queue.items()),1)
+        self.queue.idle();self.scan([upload],now+62)
+        self.assertTrue(self.queue.enabled())
+        with patch('clip_queue.time.time',return_value=now+62):
+            run_queue(self.root,lambda store,item:None)
+        self.assertEqual(self.queue.get(item['id'])['state'],'done')
+        self.assertEqual(len(self.queue.items()),1)
+
+    def test_failure_recovery_respects_paused_queue_and_disabled_channel(self):
+        now=time.time();upload=dict(video(1),published=now-10);self.scan([upload],now)
+        item=self.queue.claim();self.queue.finish(item['id'],'Local analysis reached its time limit.')
+        self.store.set_enabled(CID,False)
+        tick(self.store,now+1,launch=self.launch)
+        self.assertEqual(self.queue.get(item['id'])['state'],'failed')
+        self.store.set_enabled(CID,True);self.queue.set_enabled(False)
+        self.scan([upload],now+2)
+        self.assertEqual(self.queue.get(item['id'])['state'],'queued')
+        self.scan([upload],now+100)
+        self.assertFalse(self.queue.enabled());self.assertTrue(self.queue.paused())
+
+    def test_upload_history_lists_newer_publication_first(self):
+        self.scan([video(1,1),video(2,400),video(3,RECENT_SECONDS+1)])
+        self.assertEqual([v['id'] for v in self.store.videos(CID)],[video(1)['id'],video(2)['id'],video(3)['id']])
+
 
 class RemoteQueueTests(unittest.TestCase):
     def setUp(self):

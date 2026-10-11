@@ -6,8 +6,10 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import imageio_ffmpeg
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
 from engine import ROOT, duration
-YOUTUBE_IMPORT_API = 2
+YOUTUBE_IMPORT_API = 3
+HLS_FORMAT = 'bv*[height<=720][ext=mp4][protocol^=m3u8]+ba[protocol^=m3u8]/b[height<=720][protocol^=m3u8]'
 
 
 class UnfinishedVideo(ValueError):
@@ -92,8 +94,16 @@ def download(metadata, progress=lambda message: None, root=None):
     opts.update({'format': 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]',
                  'merge_output_format': 'mp4', 'outtmpl': str(folder / 'source.%(ext)s'),
                  'max_filesize': 4 * 1024**3, 'progress_hooks': [hook]})
-    with YoutubeDL(opts) as downloader:
-        downloader.extract_info(url, download=True)
+    try:
+        with YoutubeDL(opts) as downloader:
+            downloader.extract_info(url, download=True)
+    except DownloadError as error:
+        if not re.search(r'HTTP Error 403\b',str(error),re.I):raise
+        # Re-extract fresh URLs once, using YouTube's available HLS formats.
+        # This keeps the same resolution/size limits without account cookies.
+        progress('YouTube refused the download; trying its streaming format…')
+        with YoutubeDL(dict(opts,format=HLS_FORMAT)) as downloader:
+            downloader.extract_info(url,download=True)
     sources = [p for p in folder.glob('source.*') if p.suffix in ('.mp4', '.mkv', '.webm', '.mov')]
     if not sources:
         raise ValueError('YouTube did not provide a downloadable video within the size limit.')

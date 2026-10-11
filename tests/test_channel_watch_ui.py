@@ -86,8 +86,50 @@ class ChannelUITests(unittest.TestCase):
         app.session_state['page']='channels'
         with patch.object(youtube_import,'YOUTUBE_IMPORT_API',0),patch('channel_watch_ui.show'),patch('channel_watch.ensure_watcher'):
             app.run();self.assertFalse(app.exception)
-            self.assertEqual(youtube_import.YOUTUBE_IMPORT_API,2)
+            self.assertEqual(youtube_import.YOUTUBE_IMPORT_API,3)
             self.assertTrue(issubclass(youtube_import.UnfinishedVideo,ValueError))
+
+    def test_completed_channel_clips_are_visible_and_open_saved_results_directly(self):
+        from project_store import write
+        metadata=dict(id='vid00000001',url='https://www.youtube.com/watch?v=vid00000001',
+                      title='Completed upload',duration=300,channel_id=CID,published=100)
+        self.store.connect(CHANNEL,SETTINGS);self.store.record(CID,metadata,'ready',metadata)
+        item=self.store.enqueue(CID,metadata);queue=QueueStore(self.root)
+        queue.set_enabled(True);queue.claim()
+        result=self.root/'data/clips.json';write(result,[dict(start=0,end=5)])
+        output=self.root/'data/clip.mp4';output.write_bytes(b'export')
+        queue.update(item['id'],result=str(result),exports=[dict(video=str(output))]);queue.finish(item['id'])
+        self.app.run();self.assertFalse(self.app.exception)
+        self.assertEqual(next(m for m in self.app.metric if m.label=='Ready clips').value,'1')
+        self.button('Open clips').click().run()
+        self.assertEqual(self.app.session_state['page'],'results')
+        self.assertEqual(self.app.session_state['result_path'],str(result))
+        self.assertEqual(self.app.session_state['settings'],SETTINGS)
+
+    def test_processing_and_automatic_retry_are_visible_on_channel_page(self):
+        import time
+        self.store.connect(CHANNEL,SETTINGS)
+        meta=dict(id='vid00000001',url='https://www.youtube.com/watch?v=vid00000001',
+                  title='Pending upload',duration=300,channel_id=CID,published=time.time())
+        self.store.record(CID,meta,'ready',meta);item=self.store.enqueue(CID,meta)
+        queue=QueueStore(self.root);queue.set_enabled(True);queue.claim()
+        queue.update(item['id'],progress=.6,label='Reviewing 2 of 4')
+        self.app.run();self.assertFalse(self.app.exception)
+        self.assertTrue(any('Reviewing 2 of 4'==p.text for p in self.app.get('progress')))
+        queue.retry_upload(item['id'],'HTTP Error 403: Forbidden')
+        self.app.run();self.assertFalse(self.app.exception)
+        self.assertTrue(any('Automatic retry' in i.value for i in self.app.info))
+
+    def test_live_upgrade_reloads_old_worker_and_queue_modules(self):
+        import jobs,upgrades,local_worker_process,clip_queue
+        app=AppTest.from_file(str(Path(__file__).resolve().parents[1]/'app.py'),default_timeout=15)
+        app.session_state['page']='channels'
+        with (patch.object(jobs,'CURATION_API',0),patch.object(upgrades,'WORKER_API',0),
+              patch.object(local_worker_process,'LOCAL_WORKER_API',0),patch.object(clip_queue,'QUEUE_API',0),
+              patch('channel_watch_ui.show'),patch('channel_watch.ensure_watcher')):
+            app.run();self.assertFalse(app.exception)
+            self.assertEqual(jobs.CURATION_API,3);self.assertEqual(upgrades.WORKER_API,2)
+            self.assertEqual(local_worker_process.LOCAL_WORKER_API,3);self.assertEqual(clip_queue.QUEUE_API,4)
 
 
 if __name__=='__main__':unittest.main()

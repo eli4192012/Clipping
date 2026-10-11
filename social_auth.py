@@ -13,9 +13,53 @@ import social_store as store
 SERVICE = 'Clipping Social Publishing'
 GRAPH = 'https://graph.facebook.com/v25.0'
 SCOPES = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly'
+AUTH_ERROR_API = 1
+
+OAUTH_ERRORS = {
+    'invalid_grant': 'Your YouTube connection expired or was revoked. Open Accounts and reconnect YouTube. Your clips and saved posts are kept.',
+    'invalid_client': 'Google rejected the saved app credentials. Save the Google Desktop OAuth JSON in Accounts, then reconnect YouTube.',
+    'unauthorized_client': 'Google did not authorize this app. Check the Desktop OAuth setup in Accounts, then reconnect YouTube.',
+}
+YOUTUBE_ERRORS = {
+    'invalidTitle': 'YouTube rejected the title. Use 1–100 characters without < or >, including hashtags.',
+    'invalidDescription': 'YouTube rejected the description. Edit it and keep it within 5,000 bytes.',
+    'invalidPublishAt': 'YouTube rejected the scheduled time. Choose a future time and keep the scheduled upload private.',
+    'invalidCategoryId': 'YouTube rejected the video category. Check the app publishing setup.',
+    'uploadLimitExceeded': 'YouTube says this channel has reached its upload limit. Wait before trying another upload.',
+    'quotaExceeded': 'The YouTube API quota has been reached. Wait for the quota to reset before trying again.',
+    'dailyLimitExceeded': 'The YouTube API daily quota has been reached. Wait for it to reset before trying again.',
+    'insufficientPermissions': 'YouTube permission is missing. Open Accounts and reconnect YouTube.',
+}
 
 class SocialError(Exception):
-    pass
+    def __init__(self, message, *, status_code=None, reason=None, needs_reconnect=False):
+        super().__init__(message)
+        self.status_code=status_code
+        self.reason=reason
+        self.needs_reconnect=needs_reconnect
+
+
+def response_error(response, url):
+    """Map known provider codes to our own text; never expose response messages."""
+    parsed=urlparse(url);reason=None;message=None
+    try:body=response.json()
+    except (ValueError,TypeError):body={}
+    error=body.get('error') if isinstance(body,dict) else None
+    if parsed.hostname=='oauth2.googleapis.com' and parsed.path=='/token' and isinstance(error,str):
+        if error in OAUTH_ERRORS:reason=error;message=OAUTH_ERRORS[reason]
+    elif parsed.hostname in ('www.googleapis.com','youtube.googleapis.com') and isinstance(error,dict):
+        details=error.get('errors',[])
+        if isinstance(details,list):
+            reason=next((d.get('reason') for d in details if isinstance(d,dict) and isinstance(d.get('reason'),str) and d['reason'] in YOUTUBE_ERRORS),None)
+            message=YOUTUBE_ERRORS.get(reason)
+    reconnect=reason in ('invalid_grant','insufficientPermissions')
+    if message is None:
+        if response.status_code==401:
+            message='Account permission expired. Reconnect this account.';reconnect=True
+        elif response.status_code==403:
+            message='The platform refused access. Check app permissions, account eligibility and quota.'
+        else:message=f'Platform request failed (HTTP {response.status_code}). Check account/app setup and the saved post status.'
+    return SocialError(message,status_code=response.status_code,reason=reason,needs_reconnect=reconnect)
 
 def vault():
     # Explicit native backend: never silently fall back to a plaintext keyring.
@@ -41,12 +85,7 @@ def request(method, url, **kwargs):
     except requests.RequestException:
         raise SocialError('Connection interrupted. Check status before trying again.') from None
     if response.status_code >= 400:
-        # Do not surface request URLs or raw provider bodies: they can contain credentials.
-        if response.status_code == 401:
-            raise SocialError('Account permission expired. Reconnect this account.')
-        if response.status_code == 403:
-            raise SocialError('The platform refused access. Check app permissions, account eligibility and quota.')
-        raise SocialError(f'Platform request failed (HTTP {response.status_code}). Check account/app setup and the saved post status.')
+        raise response_error(response,url)
     return response
 
 def payload(response):
@@ -145,7 +184,10 @@ def access(account):
     token=secret(account['id'])
     if not token:raise SocialError('Account credentials are missing. Reconnect in Accounts.')
     if account['platform']=='youtube' and token.get('expires_at',0)<time.time()+90:
-        fresh=payload(request('POST','https://oauth2.googleapis.com/token',data=dict(token['client'],refresh_token=token['refresh_token'],grant_type='refresh_token')))
+        try:fresh=payload(request('POST','https://oauth2.googleapis.com/token',data=dict(token['client'],refresh_token=token['refresh_token'],grant_type='refresh_token')))
+        except SocialError as error:
+            if error.needs_reconnect:store.save_account(dict(account,connection_error=str(error)))
+            raise
         token.update(fresh);token['expires_at']=time.time()+fresh.get('expires_in',3600);secret(account['id'],token)
     return token['access_token']
 

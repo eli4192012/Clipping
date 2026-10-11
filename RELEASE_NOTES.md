@@ -1,3 +1,52 @@
+# v6.2 · Clear YouTube connection recovery
+
+- Google `invalid_grant` now explains that the saved YouTube connection expired or was revoked and points to reconnection in Accounts. Publishing and Accounts show the connection warning; saved Google app settings are reused.
+- An account-renewal failure keeps the post editable and saves its explanation before any upload begins. Existing clips, posting text and upload/schedule receipts stay saved.
+- Known YouTube errors such as rejected metadata, a bad scheduled time or upload/quota limits use clear messages. Raw provider messages, URLs and credentials remain hidden. Uncertain upload attempts still require status checks and are never automatically reposted.
+- Reconnecting the same channel replaces its expired login and clears the warning. It does not publish a clip. See [validation](V62_VALIDATION.md).
+
+# v6.1 · Posting text ready automatically
+
+- Queued clipping jobs now prepare checked AI titles, inline hashtags (including #fyp) and descriptions after exporting the clips. Opening an individual clip also starts missing text in the local queue.
+- Publishing automatically fills missing text for existing exports in selected projects and reuses checked AI caches. It saves successful text as it finishes, shows preparation progress, and continues outside the browser. Video files and manual text are preserved.
+- Rejected AI drafts show their reason and wait for **Retry missing AI text** or a manual edit. Refreshing the page does not repeatedly regenerate them. Reviewed drafts, published posts and scheduled receipts are preserved. Large clip lists show 12 clips per page.
+- All writing stays local; no model weights or analysis-cache versions change. See [validation](V61_VALIDATION.md).
+
+# v6.0
+
+Clipping, captions, titles, publishing and scheduling in one local studio.
+
+# v5.39 · Schedule a post
+
+- Adds **Schedule this post**, date/time controls and a saved **Scheduling timezone** in Publishing. **Schedule to [account]** saves the exact video and displayed posting text with the selected future time. New **Scheduled posts** and existing history screens show schedule details.
+- YouTube uploads privately now and receives a native future public release time. After YouTube accepts the upload and schedule, it can publish while this Mac is off. Uploaded schedules can be managed in YouTube Studio. Processed private scheduled videos stay Scheduled, and are only marked Published/Used after public release is confirmed. Existing Google audit/account restrictions remain.
+- Instagram schedules use a durable local background runner. It needs this Mac awake and online, survives browser closure and resumes when the app reopens. Pending schedules can be cancelled back to editing. Posts more than an hour late need a new schedule; disconnected accounts or changed files do not post. Upload receipts are reused, and uncertain publication is never automatically repeated.
+- Converts selected local dates to UTC using timezone rules, rejects past dates and skipped/repeated daylight-saving clock times, and preserves date/time inputs across refreshes. Publishing now remains available. Sources, transcripts, exports, model weights and analysis-cache versions are preserved. See [validation](V539_VALIDATION.md).
+
+# v5.38 · A dedicated Publishing workspace
+
+- Adds **Publishing** in the sidebar. Choose projects once; the workspace collects their finished clips with saved titles and descriptions. **Add this project to Publishing** in the clip collection provides a shortcut. Project selection and destination settings persist locally.
+- Adds **Ready to post**, **Needs preparation** and **Posting history**. Preview the exact saved video, edit the title with its inline hashtags and description, and press **Publish to [account]** once. The button saves the displayed text and starts the upload using the existing YouTube or Instagram integration; no separate draft/review checkbox is required in this workspace.
+- **Prepare missing clips & AI text** uses the local video queue, existing completed analysis, captioned exports and source-checked AI writer. Saved manual text and finished files are reused. Failed text checks stay visible instead of copying the transcript into a description. Preparation does not publish and respects queue pauses. Recovered partial analyses must finish before automatic preparation.
+- Carries older saved exports forward using their actual captions and existing posting text. Newly rendered clips retain the exact final speech package and original source-clip identity for publishing. The newest look for a source clip is shown while earlier files remain saved.
+- Shows YouTube visibility and audience choices, Instagram feed sharing, upload progress, saved receipts and confirmed post status. Existing attempts are kept in history; a duplicate check under the upload lock also protects against competing tabs. Successful posts use the existing Used markers. Direct publishing supports connected YouTube and Instagram accounts; TikTok remains a separate posting package.
+- Model weights, dependencies, the analysis-cache VERSION, existing sources, transcripts, captions, exports and reviewed drafts are preserved. No posts were sent during validation. See [validation](V538_VALIDATION.md).
+
+# v5.37 · Keep checked clips accessible after interrupted analysis
+
+- Adds **Open recovered clips** and **Resume saved work & export clips** after analysis errors. Recovery uses only approved cached speech edits matching the original transcript, local editor and settings, then applies the existing overlap and coverage selection. It performs no new inference.
+- Saves recovered selections separately and labels them as partial. Full analysis and any remaining visual/sound review can continue in the serial queue with the same settings. An unfinished edit and previously unsuccessful checks may run again. Original videos, transcripts, exports, final results and cached decisions remain saved.
+- Keeps the failed-job state across page reruns and detects an already queued continuation before starting foreground work. Recovery respects queue pauses and skips duplicate active entries.
+- Enforces the progress-based topic timeout inside the worker runner, including older callers that omit the option. Healthy topic work can exceed one hour; one hour without new progress or 24 hours overall stops it. Other worker deadlines remain unchanged. The UI version is v5.37; analysis-cache versions and model weights are unchanged. See [validation](V537_VALIDATION.md).
+
+# v5.36 · Ready clips and automatic upload recovery
+
+- Connected channels now show **Ready clips**, the video currently being edited, automatic retry status and **Open clips** for each saved selection. Finished captioned video files appear directly on the channel page; the upload history lists newer publication times first.
+- Long topic reviews continue while actual review progress advances, instead of being stopped after one hour of productive work. One hour without changed progress and a 24-hour overall limit still stop a stalled worker; completed reviews remain cached.
+- Watched uploads automatically retry temporary download/network failures and resumable analysis time limits up to three times, waiting 1, 5 and 25 minutes. Other queued videos continue between retries. Existing failed watched jobs with those errors can recover while their channel is enabled. Explicit queue pauses, removed jobs and completed jobs are preserved.
+- A refused HTTP 403 download gets one fresh attempt with YouTube's streaming formats at the same 720p/4 GB limits. Failure remains visible if neither download path works. No account cookies or new dependencies are added.
+- Uses the existing local AI selection, captioned exports and saved caches. No automatic publishing or cloud processing is added. See [validation](V536_VALIDATION.md).
+
 # v5.35 · Connect channels for automatic clipping
 
 - Adds **YouTube channels** in the sidebar: connect a public channel or @handle and start watching without a Google sign-in or API key. Defaults to the Colts channel, vertical clips with captions and Automatic per upload. It reuses the full transcript and existing local detector to choose Interview, Podcast or Sports; fixed or saved settings are also available. Detection still needs review.

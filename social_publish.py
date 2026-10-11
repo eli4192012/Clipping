@@ -7,6 +7,10 @@ from pathlib import Path
 from urllib.parse import urlparse
 import social_auth as auth
 import social_store as store
+PUBLISH_WORKSPACE_API = 3
+
+
+class UploadBusy(auth.SocialError):pass
 
 @contextmanager
 def upload_lock():
@@ -14,7 +18,7 @@ def upload_lock():
     path.parent.mkdir(parents=True,exist_ok=True)
     with path.open('a') as lock:
         try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        except BlockingIOError:raise auth.SocialError('Another upload is running. Wait for it to finish.')
+        except BlockingIOError:raise UploadBusy('Another upload is running. Wait for it to finish.')
         try:yield
         finally:fcntl.flock(lock,fcntl.LOCK_UN)
 
@@ -42,8 +46,12 @@ def youtube_upload(draft, account, token, update):
     uri=auth.secret('upload:'+draft['id'])
     if not uri:
         if draft['status']!='Draft':raise auth.SocialError('This attempt has no recoverable upload session. Check YouTube Studio before creating another draft.')
+        status={'privacyStatus':draft['privacy'],'selfDeclaredMadeForKids':draft['made_for_kids']}
+        if draft.get('publish_at'):
+            from social_schedule import future_time
+            status.update(privacyStatus='private',publishAt=future_time(draft['publish_at']))
         checkpoint(draft,status='Uploading')
-        result=auth.request('POST','https://www.googleapis.com/upload/youtube/v3/videos',params={'uploadType':'resumable','part':'snippet,status'},headers=dict(headers,**{'X-Upload-Content-Length':str(size),'X-Upload-Content-Type':'video/mp4'}),json={'snippet':{'title':draft['title'],'description':draft['description'],'categoryId':'22'},'status':{'privacyStatus':draft['privacy'],'selfDeclaredMadeForKids':draft['made_for_kids']}})
+        result=auth.request('POST','https://www.googleapis.com/upload/youtube/v3/videos',params={'uploadType':'resumable','part':'snippet,status'},headers=dict(headers,**{'X-Upload-Content-Length':str(size),'X-Upload-Content-Type':'video/mp4'}),json={'snippet':{'title':draft['title'],'description':draft['description'],'categoryId':'22'},'status':status})
         uri=trusted_url(result.headers.get('Location',''),'www.googleapis.com');auth.secret('upload:'+draft['id'],uri)
     else:
         trusted_url(uri,'www.googleapis.com')
@@ -52,6 +60,9 @@ def youtube_upload(draft, account, token, update):
     if response.status_code in (200,201):
         youtube_uploaded(draft,auth.payload(response));return
     if response.status_code!=308:raise auth.SocialError('Unable to confirm upload position. Check YouTube Studio.')
+    if draft.get('publish_at'):
+        from social_schedule import future_time
+        future_time(draft['publish_at'])
     offset=int(response.headers.get('Range','bytes=0--1').rsplit('-',1)[-1])+1 if 'Range' in response.headers else 0
     checkpoint(draft,status='Uploading',error='')
     with open(draft['video'],'rb') as video:
@@ -68,7 +79,10 @@ def youtube_upload(draft, account, token, update):
 
 def youtube_uploaded(draft, result):
     if not result.get('id'):raise auth.SocialError('YouTube did not return a video ID. Check status.')
-    checkpoint(draft,status='Processing',remote_id=result['id'],url='https://www.youtube.com/watch?v='+result['id'],actual_privacy=result.get('status',{}).get('privacyStatus',draft['privacy']),error='')
+    status=result.get('status',{})
+    checkpoint(draft,status='Scheduled' if draft.get('publish_at') and status.get('publishAt') else 'Processing',
+        remote_id=result['id'],url='https://www.youtube.com/watch?v='+result['id'],
+        actual_privacy=status.get('privacyStatus',draft['privacy']),remote_publish_at=status.get('publishAt'),error='')
 
 def instagram_upload(draft, account, token, update):
     headers={'Authorization':'Bearer '+token}
@@ -109,28 +123,43 @@ def instagram_permalink(draft,headers):
             if result.get('permalink'):checkpoint(draft,url=result['permalink'])
         except auth.SocialError:pass
 
-def publish(draft_id,update=lambda *args:None,expected_updated=None):
+def publish(draft_id,update=lambda *args:None,expected_updated=None,prevent_duplicate=False,scheduled_due=False):
     with upload_lock():
         draft=store.get(draft_id)
         if not draft:raise ValueError('Draft not found.')
         if expected_updated is not None and draft['updated']!=expected_updated:raise auth.SocialError('This draft changed after your review. Refresh and review it again.')
-        allowed=('Draft','Ready') if draft['platform']=='instagram' else ('Draft','Uploading','Needs check')
+        local_schedule=scheduled_due and draft.get('schedule_provider')=='local' and draft['platform']=='instagram' and draft['status']=='Scheduled'
+        if local_schedule:
+            from social_schedule import parse_time
+            if parse_time(draft['publish_at']).timestamp()>time.time():raise auth.SocialError('This scheduled post is not due yet.')
+        allowed=('Draft','Ready','Scheduled') if local_schedule else ('Draft','Ready') if draft['platform']=='instagram' else ('Draft','Uploading','Needs check')
         if draft['status'] not in allowed:raise auth.SocialError('Check the existing post status before continuing.')
+        if prevent_duplicate:
+            from clip_usage import clip_key
+            for prior in store.drafts(draft['folder']):
+                if prior['id']==draft_id or prior['account_id']!=draft['account_id'] or prior['status'] in ('Draft','Failed'):continue
+                if Path(prior['video']).resolve()==Path(draft['video']).resolve() or clip_key(prior['run'],prior['candidate'])==clip_key(draft['run'],draft['candidate']):
+                    raise auth.SocialError('This clip already has a posting attempt for this account. Check its status before posting again.')
         store.validate(draft);account=account_for(draft)
         if account['platform']!=draft['platform']:raise auth.SocialError('The destination account does not match this draft.')
+        original=draft
         store.claim(draft_id,draft['updated'])
+        if local_schedule:draft=dict(draft,status='Draft')
         try:token=auth.access(account)
-        except Exception:
+        except Exception as error:
             log_exception('social_publish')
-            store.save(draft) # No upload request has happened; restore the editable state.
+            if local_schedule:store.save(dict(original,status='Schedule failed',error='Reconnect this account, then cancel and schedule the post again.'))
+            else:store.save(dict(draft,error=str(error) if isinstance(error,auth.SocialError) else 'Account connection could not be renewed. Open Accounts and reconnect.')) # No upload request has happened; keep its previous state.
             raise
         try:
             if draft['platform']=='youtube':youtube_upload(draft,account,token,update)
             else:instagram_upload(draft,account,token,update)
-        except Exception:
+        except Exception as error:
             log_exception('social_publish')
-            if draft['status']!='Published':checkpoint(draft,status='Needs check',error='The outcome needs checking. Use Check status; do not create another post until you check the destination.')
-            raise auth.SocialError('Upload interrupted or refused. Your attempt is saved. Use Check status before taking another action.') from None
+            # Only expose our allowlisted provider explanations, never raw messages.
+            detail=str(error)+' ' if isinstance(error,auth.SocialError) and error.reason in auth.YOUTUBE_ERRORS else ''
+            if draft['status']!='Published':checkpoint(draft,status='Needs check',error=detail+'The outcome needs checking. Use Check status; do not create another post until you check the destination.')
+            raise auth.SocialError(detail+'Upload interrupted or refused. Your attempt is saved. Use Check status before taking another action.') from None
         return draft
 
 def check(draft_id):
@@ -149,6 +178,14 @@ def check(draft_id):
             video=result['items'][0];status=video.get('status',{});processing=video.get('processingDetails',{}).get('processingStatus')
             if status.get('uploadStatus') in ('failed','rejected','deleted') or processing in ('failed','terminated'):
                 checkpoint(draft,status='Failed',error='YouTube could not publish this upload. See YouTube Studio for details.')
+            elif draft.get('publish_at'):
+                if status.get('privacyStatus')=='public' and (status.get('uploadStatus')=='processed' or processing=='succeeded'):
+                    published(draft,actual_privacy='public')
+                elif status.get('publishAt'):
+                    checkpoint(draft,status='Scheduled',remote_publish_at=status['publishAt'],actual_privacy=status.get('privacyStatus','private'),error='')
+                elif status.get('uploadStatus')=='processed' or processing=='succeeded':
+                    checkpoint(draft,status='Needs check',actual_privacy=status.get('privacyStatus','unknown'),error='YouTube has not confirmed a future public release. Check the video and schedule in YouTube Studio.')
+                else:checkpoint(draft,status='Processing',error='')
             elif status.get('uploadStatus')=='processed' or processing=='succeeded':
                 published(draft,actual_privacy=status.get('privacyStatus',draft['privacy']))
             else:checkpoint(draft,status='Processing',error='')
@@ -173,7 +210,7 @@ def retry_failed(draft_id):
             raise auth.SocialError('Only a confirmed failed attempt can be reset. Check uncertain outcomes first.')
         auth.forget('upload:'+draft_id)
         archived=dict(draft,id=draft_id+'-attempt-'+uuid.uuid4().hex[:8])
-        fresh={k:v for k,v in draft.items() if k not in ('remote_id','container_id','url','actual_privacy','publish_requested','error')}
+        fresh={k:v for k,v in draft.items() if k not in ('remote_id','container_id','url','actual_privacy','publish_requested','error','publish_at','remote_publish_at','schedule_timezone','schedule_provider','schedule_next_check')}
         fresh.update(status='Draft',updated=time.time())
         with store.connection() as db:
             import json
